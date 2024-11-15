@@ -1,7 +1,14 @@
 import os 
-os.environ["OPENAI_API_KEY"] = ""
+import openai
+
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
+
+
+# Set custom base URL for OpenAI API
+openai.api_key = os.environ["OPENAI_API_KEY"]
+# openai.api_base = "http://8.209.215.15/api/openai/" 
 
 from llama_index.core import SimpleDirectoryReader
 from llama_index.core import VectorStoreIndex
@@ -35,7 +42,7 @@ def load_file():
 
     # 将文件加载为文档
     reader = SimpleDirectoryReader(
-        input_files = ["红楼梦.txt"]
+        input_files = ["红.txt"]
     )
     documents = reader.load_data()
 
@@ -54,28 +61,71 @@ def create_nodes(documents):
     return nodes
 
 def create_graph_index(documents):
+    #########使用本地模型
 
-    print("创建图索引")
+    # print("创建图索引")
 
+    # # 使用 HuggingFace 编码模型
+    # Settings.embed_model = HuggingFaceEmbedding(
+    #     model_name="/home/kuaipan/model/bgelarge/bge-large-zh-v1.5"
+    # )
+
+    # # 创建图存储和存储上下文
+    # graph_store = SimpleGraphStore()
+    # storage_context = StorageContext.from_defaults(graph_store=graph_store)
+
+    # # 创建知识图索引
+    # index = KnowledgeGraphIndex.from_documents(
+    #     documents,
+    #     max_triplets_per_chunk=2,  # 每个文本块最大三元组数量
+    #     storage_context=storage_context,
+    #     embed_model=Settings.embed_model  # 使用 HuggingFace 嵌入模型
+    # )
+
+    # # 将图索引持久化到指定的目录
+    # index.root_index.storage_context.persist(persist_dir=graph_index_dict)
+
+
+    #################使用openai
+    # print("创建图索引")
     # llm = OpenAI(temperature=0, model="text-davinci-002")
     # Settings.llm = llm
     # Settings.chunk_size = 512
 
-    # # 创建并存储图索引
     # graph_store = SimpleGraphStore()
     # storage_context = StorageContext.from_defaults(graph_store=graph_store)
 
-    # 使用本地编码模型模型
-    Settings.embed_model = HuggingFaceEmbedding(
-        model_name="/home/kuaipan/model/bgelarge/bge-large-zh-v1.5"
+    # # NOTE: can take a while!
+    # index = KnowledgeGraphIndex.from_documents(
+    #     documents,
+    #     max_triplets_per_chunk=2,
+    #     storage_context=storage_context,
+    # )
+    # return index
+
+
+    #################使用openai
+    print("创建图索引")
+    # 使用 OpenAI 的嵌入模型
+    Settings.embed_model = OpenAIEmbedding(
+        model="text-embedding-ada-002"  # 使用 OpenAI 提供的嵌入模型
     )
-    # storage_context=storage_context,
+
+    # 创建图存储和存储上下文
+    graph_store = SimpleGraphStore()
+    storage_context = StorageContext.from_defaults(graph_store=graph_store)
+
+    # 创建知识图索引
     index = KnowledgeGraphIndex.from_documents(
         documents,
-        max_triplets_per_chunk=2,
-        embed_model=Settings.embed_model
+        max_triplets_per_chunk=2,  # 每个文本块最大三元组数量
+        storage_context=storage_context,
+        embed_model=Settings.embed_model  # 使用 OpenAI 嵌入模型
     )
+
+    # 将图索引持久化到指定的目录
     index.root_index.storage_context.persist(persist_dir=graph_index_dict)
+
 
 def create_index(nodes,documents):
     
@@ -135,12 +185,13 @@ def graph_response(index):
 def respones(index):
     query_engine = index.as_query_engine()
     response = query_engine.query(
-        "林黛玉是谁"
+        "这本书讲了什么"
     )
     print(response)
 
 def main():
     graph_response(graph_index)
+    # respones(index)
 
 if __name__ == "__main__":
     index_dict = "./data/index/"
@@ -151,5 +202,4 @@ if __name__ == "__main__":
     graph_index = create_graph_index(documents)
     
     main()
-
 
