@@ -17,9 +17,13 @@ from docx import Document as DocxDocument
 from concurrent.futures import ThreadPoolExecutor
 import pdfplumber
 import fitz  # PyMuPDF
+from config import OPENAI_API_KEY1,API_BASE
 
 
-
+# 设置 OpenAI API
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY1
+openai.api_key = os.environ["OPENAI_API_KEY"]
+openai.api_base = API_BASE
 
 # 配置 OpenAI 模型，使用 GPU 加速
 # temperature: 控制生成文本的随机性，值越低，生成的文本越确定
@@ -216,8 +220,8 @@ HTML_FILE = "mingchao_knowledge_graph.html"
 
 # 检查存储目录是否存在
 if not os.path.exists(PERSIST_DIR):
-    # file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/红富士苹果生产.docx"
-    file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/明朝那些事儿.pdf"
+    # file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/data/红富士苹果生产.docx"
+    file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/data/明朝那些事儿.pdf"
     documents = process_file(file_path,"pdf")
     # 分块文本
     chunk_size = 512  # 设置每个块的字符数
@@ -252,7 +256,7 @@ if not os.path.exists(PERSIST_DIR):
         max_triplets_per_chunk=10,
         storage_context=storage_context,
         show_progress=True,
-        include_embeddings=Flase,
+        include_embeddings=False,
         # kg_triplet_extract_fn=custom_extract_triplets,
         kg_triple_extract_template=CUSTOM_KG_TRIPLET_EXTRACT_PROMPT,
         allowed_entity_types=entity_types,

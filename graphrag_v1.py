@@ -12,9 +12,12 @@ import pdfplumber
 from llama_index.core.schema import Document
 import re
 from docx import Document as DocxDocument
+from config import OPENAI_API_KEY1,API_BASE
 
-
-
+# 设置 OpenAI API
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY1
+openai.api_key = os.environ["OPENAI_API_KEY"]
+openai.api_base = API_BASE
 
 
 # 配置 OpenAI 模型，使用 GPU 加速
