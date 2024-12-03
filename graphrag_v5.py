@@ -26,6 +26,8 @@ from functools import lru_cache
 import networkx as nx
 from matplotlib import pyplot as plt
 from neo4j import GraphDatabase
+from llama_index.graph_stores.neo4j import Neo4jGraphStore
+
 
 
 # 设置 OpenAI API
@@ -134,33 +136,14 @@ def check_subfolder_exists(parent_folder, subfolder_name):
     return os.path.exists(subfolder_path) and os.path.isdir(subfolder_path)
 
 
-def create_neo4j_database(uri, username, password, database_name):
-    driver = GraphDatabase.driver(uri, auth=(username, password))
-    with driver.session(database="system") as session:
-        result = session.run("SHOW DATABASES")
-        databases = {record["name"]: record["currentStatus"] for record in result}
-        if database_name not in databases:
-            session.run(f"CREATE DATABASE {database_name}")
-            print(f"数据库 {database_name} 已创建。")
-            # 等待数据库变为 online 状态
-            while True:
-                result = session.run(f"SHOW DATABASE {database_name}")
-                status = result.single()["currentStatus"]
-                if status == "online":
-                    print(f"数据库 {database_name} 已上线。")
-                    break
-                else:
-                    print(f"等待数据库 {database_name} 上线，当前状态：{status}")
-        else:
-            print(f"数据库 {database_name} 已存在。")
-    driver.close()
 
-    # 创建并返回 graph_store 对象
+# 创建 Neo4jGraphStore，不再创建数据库，直接使用默认数据库
+def create_neo4j_graph_store(uri, username, password):
     graph_store = Neo4jGraphStore(
-        uri=uri,
+        url=uri,
         username=username,
-        password=password,
-        database=database_name
+        password=password
+        # 不指定 database 参数，使用默认数据库
     )
     return graph_store
 
@@ -181,11 +164,10 @@ def generate_knowledge_graph(file_path, file_type, graph_name, storage_dir):
     entity_types, relation_types, CUSTOM_KG_TRIPLET_EXTRACT_PROMPT = get_config()
 
     # 获取 graph_store
-    graph_store = create_neo4j_database(
+    graph_store = create_neo4j_graph_store(
         uri="bolt://localhost:7687",
         username="neo4j",
-        password="-GqGSuQGn4erxd5",  # 请替换为您的 Neo4j 密码
-        database_name=graph_name
+        password="-GqGSuQGn4erxd5"  # 使用环境变量存储密码
     )
 
     # 创建存储上下文
@@ -201,7 +183,9 @@ def generate_knowledge_graph(file_path, file_type, graph_name, storage_dir):
         kg_triple_extract_template=CUSTOM_KG_TRIPLET_EXTRACT_PROMPT,
         allowed_entity_types=entity_types,
         allowed_relation_types=relation_types,
-        triplet_filter_fn=lambda triplets: filter_triplets_by_person(triplets, graph_name)
+        triplet_filter_fn=lambda triplets: filter_triplets_by_person(triplets, graph_name),
+        extra_node_labels=[graph_name],  # 添加节点标签
+        extra_relationship_types=[graph_name + "_REL"]  # 添加关系类型
     )
 
     print("知识图谱已生成并存储到Neo4j数据库中")
@@ -215,11 +199,11 @@ def generate_knowledge_graph(file_path, file_type, graph_name, storage_dir):
     return index
 
 def load_knowledge_graph(storage_dir):
-    # 初始化Neo4jGraphStore
-    graph_store = Neo4jGraphStore(
+    # 获取 graph_store
+    graph_store = create_neo4j_graph_store(
         uri="bolt://localhost:7687",
         username="neo4j",
-        password="-GqGSuQGn4erxd5"  # 请替换为您的Neo4j密码
+        password="-GqGSuQGn4erxd5" # 使用环境变量存储密码
     )
 
     # 创建存储上下文
