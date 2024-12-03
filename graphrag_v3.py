@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 import fitz  # PyMuPDF
 from config import OPENAI_API_KEY1 as OPENAI_API_KEY
 from config import API_BASE
-from prompt.prompt import hongloumeng as triplet_extraction_template
+from prompt.prompt import mingchaonaxieshi as triplet_extraction_template
 from functools import lru_cache
 import networkx as nx
 from matplotlib import pyplot as plt
