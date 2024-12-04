@@ -1,4 +1,4 @@
-mingchaonaxieshi = {
+mingchaonaxieshi_v1 = {
     "CUSTOM_KG_TRIPLET_EXTRACT_TMPL":(
             "从给定文本中提取与明朝历史相关的知识三元组。"
             "每个三元组应以 (head, relation, tail) 及其各自的类型形式出现。\n"
@@ -37,6 +37,36 @@ mingchaonaxieshi = {
 
 }
 
+mingchaonaxieshi_v2 = {
+    "CUSTOM_KG_TRIPLET_EXTRACT_TMPL": (
+        "从给定文本中提取重要信息并总结为简短的核心内容，随后根据总结生成知识图谱。\n"
+        "---------------------\n"
+        "步骤1：总结核心内容\n"
+        "- 从文本中提取主要事件、关键人物和重要组织，压缩成几句话。\n"
+        "- 示例：\n"
+        "  文本：朱重八参加了郭子兴领导的红巾军，并最终建立了明朝。\n"
+        "  总结：朱重八加入了红巾军，并在郭子兴的领导下崭露头角，最终建立了明朝。\n"
+        "\n"
+        "步骤2：生成知识图谱\n"
+        "- 根据总结的核心内容，生成知识图谱三元组。\n"
+        "- 输出以 JSON 格式：[{{'head': '', 'head_type': '', 'relation': '', 'tail': '', 'tail_type': ''}}]\n"
+        "- 示例：\n"
+        "  总结：朱重八加入了红巾军，并在郭子兴的领导下崭露头角，最终建立了明朝。\n"
+        "  知识图谱：[{{'head': '朱重八', 'head_type': 'PERSON', 'relation': 'PARTICIPANT_IN', 'tail': '红巾军', 'tail_type': 'ORGANIZATION'}},\n"
+        "             {{'head': '郭子兴', 'head_type': 'PERSON', 'relation': 'LEADER_OF', 'tail': '红巾军', 'tail_type': 'ORGANIZATION'}},\n"
+        "             {{'head': '朱重八', 'head_type': 'PERSON', 'relation': 'FOUNDER_OF', 'tail': '明朝', 'tail_type': 'DYNASTY'}}]\n"
+        "---------------------\n"
+        "文本：{text}\n"
+        "输出：\n"
+    ),
+    "allowed_entity_types": [
+        "PERSON", "EVENT", "DYNASTY", "ORGANIZATION", "POLICY"
+    ],
+    "allowed_relation_types": [
+        "PARTICIPANT_IN", "FOUNDER_OF", "RELATED_TO", "LEADER_OF", "RESULTED_IN", 
+        "MENTOR_OF", "ALLY_OF", "OPPOSED_BY"
+    ]
+}
 
 hongloumeng = {
     "CUSTOM_KG_TRIPLET_EXTRACT_TMPL":(

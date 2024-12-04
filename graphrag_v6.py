@@ -9,22 +9,22 @@ from llama_index.core.graph_stores import SimpleGraphStore
 from llama_index.llms.openai import OpenAI
 from pyvis.network import Network
 from llama_index.llms.openai import OpenAI
-import IPython
 import openai
 import torch
-from llama_index.readers.file import PyMuPDFReader
-import pdfplumber
 from llama_index.core.schema import Document
 import re
 from docx import Document as DocxDocument
-from concurrent.futures import ThreadPoolExecutor
 import fitz  # PyMuPDF
 from config import OPENAI_API_KEY1 as OPENAI_API_KEY
-from config import API_BASE
-from prompt.prompt import hongloumeng as triplet_extraction_template
+from config import API_BASE1 as API_BASE
+from config import API_BASE2
+from prompt.prompt import mingchaonaxieshi_v2 as triplet_extraction_template
 from functools import lru_cache
 import networkx as nx
 from matplotlib import pyplot as plt
+from llama_index.core.schema import Node
+from llama_index.core.schema import MediaResource
+from openai import OpenAI as local_openai
 
 
 # 设置 OpenAI API
@@ -133,9 +133,6 @@ def check_subfolder_exists(parent_folder, subfolder_name):
 
 
 
-
-
-
 def generate_knowledge_graph(file_path,file_type,graph_name,storage_dir):
     # 文件处理和知识图谱构建
     documents = process_file(file_path, file_type)
@@ -185,6 +182,7 @@ def load_knowledge_graph(storage_dir):
     return index
 
 
+
 def generate_subgraph(index, store_dir, noun=None):
     """
     从原始知识图谱中抽取子图并存储。
@@ -192,83 +190,83 @@ def generate_subgraph(index, store_dir, noun=None):
     :param store_dir: 存储路径
     :param noun: 查询的名词
     """
-    from llama_index.core.schema import Node
-    import os
-
-    triplets = list(index.property_graph_store.get_triplets())
-    print("Triplets:", triplets)
-    # 初始化 OpenAI 模型对象
-    openai_llm = OpenAI(
-        api_key=OPENAI_API_KEY,
-        api_base="https://api.openai.com/v1",
-        temperature=0
+    # 生成noun别的称呼
+    client = local_openai(  
+    api_key=OPENAI_API_KEY,
+    base_url=API_BASE2 
+)
+    completion = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
+            {"role": "user","content": f"{noun}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
+        ]
     )
+    nouns = completion.choices[0].message.content.split("&")[1:-1]
+    nouns.append(noun)
 
-    # 定义同义词检索器
-    synonym_retriever = LLMSynonymRetriever(
-        graph_store=index.property_graph_store,
-        llm=openai_llm,
-        synonym_prompt=(
-            "Given the name '{query}', generate synonyms or related terms such as "
-            "nicknames, titles, or indirect references. Provide all synonyms/keywords "
-            "separated by '^' symbols: '林黛玉'."
-        ),
-        max_keywords=10
-    )
+    # 从知识图谱中直接检索与名词相关的三元组
+    triplets = list(index.property_graph_store.get_triplets(entity_names=nouns))
+    # 如果没有找到三元组，输出提示信息
+    if not triplets:
+        print(f"未找到与名词 '{noun}' 相关的三元组。请检查名词是否存在于知识图谱中。")
+        return
+    
+    # 创建NetworkX图
+    G = nx.DiGraph()
+    # 添加节点和边
+    for subj, rel, obj in triplets:
+        G.add_node(subj.id, label=subj.name or f"节点-{subj.id}")
+        G.add_node(obj.id, label=obj.name or f"节点-{obj.id}")
+        G.add_edge(subj.id, obj.id, label=rel.label or f"关系-{rel.id}")
+    # 使用pyvis可视化
+    net = Network(notebook=True, cdn_resources="in_line", directed=True)
+    net.from_nx(G)
+    # # 生成静态图
+    # net.save_graph(os.path.join(store_dir, "static_subgraph.html"))
+    # 生成动态图
+    net.show(os.path.join(store_dir, "subgraph.html"))
+    print(f"子图已存储到 {os.path.join(store_dir, 'subgraph.html')}")
 
-    # 针对某个名词进行检索
-    query_results = synonym_retriever.retrieve(noun)
-
-    # 确保节点是 Node 类型
-    nodes = [result.node for result in query_results]
-    if not nodes or not all(isinstance(node, Node) for node in nodes):
-        raise ValueError("Nodes must be instances of `Node` or its subclass, and cannot be empty.")
-
-    # 创建存储上下文
-    storage_context = StorageContext.from_defaults()
-
-    # 初始化 PropertyGraphIndex
-    subgraph_index = PropertyGraphIndex(nodes=nodes, storage_context=storage_context)
-
-    # 保存子图索引
-    subgraph_dir = os.path.join(store_dir, "subgraph", "index")
-    subgraph_index.storage_context.persist(persist_dir=subgraph_dir)
-
-    print(f"子图已存储到 {subgraph_dir}")
+    # # 提取节点ID和文本
+    # nodes = []
+    # for subj, rel, obj in triplets:
+    #     # 假设subj和obj是EntityNode对象，并且包含id和text属性
+    #     nodes.append(Node(id=subj.id, text=MediaResource(content=subj.name or f"节点-{subj.id}")))
+    #     nodes.append(Node(id=rel.id, text=MediaResource(content=rel.label or f"关系-{rel.id}")))
+    #     nodes.append(Node(id=obj.id, text=MediaResource(content=obj.name or f"节点-{obj.id}")))
 
     
-# 缓存查询结果
-@lru_cache(maxsize=128)
-def cached_query(query_engine, query):
-    return query_engine.query(query)
+    # # 确保节点列表不为空
+    # if not nodes:
+    #     raise ValueError("未找到与该名词相关的节点。")
 
-# 并行查询处理
-def parallel_queries(query_engine, queries, max_workers=4):
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        responses = list(executor.map(lambda q: cached_query(query_engine, q), queries))
-    return responses
+    # # 创建存储上下文
+    # storage_context = StorageContext.from_defaults()
+
+    # # 初始化 PropertyGraphIndex
+    # subgraph_index = PropertyGraphIndex(nodes=nodes, storage_context=storage_context)
+
+    # # 保存子图索引
+    # subgraph_dir = os.path.join(store_dir, "subgraph", "index")
+    # subgraph_index.storage_context.persist(persist_dir=subgraph_dir)
+
+    # print(f"子图已存储到 {subgraph_dir}")
+
 
 
 def get_response(index,queries):
     # queries为问题列表
     query_engine = index.as_query_engine(llm=llm, include_text=False)
-    # 仅检索，不调用 LLM，减少 LLM 的调用
-    query_engine.set_query_mode("retrieve_only")
-    # 降低生成的随机性
-    query_engine.llm.set_temperature(0.0)  # 确保结果一致
-    # 并行处理查询
-    responses = parallel_queries(query_engine, queries)
-    # 打印查询结果
-    result = []
-    for query, response in zip(queries, responses):
-        result.append([query,response])
-    return result
+    # query_engine.set_query_mode("compact")
+    response = query_engine.query(queries)
+    return response
 
 
 if __name__ == "__main__":
-    file_path = "/Users/hzl/Project/my_graphrag/data/红.txt"
-    file_type = "txt"
-    graph_name = "hongloumeng"
+    file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/data/明朝那些事儿.pdf"
+    file_type = "pdf"
+    graph_name = "mingchao2"
     
     # 生成存储路径
     storage_dir = setup_storage_dir(graph_name)
@@ -278,6 +276,8 @@ if __name__ == "__main__":
     else:
         index = load_knowledge_graph(storage_dir)
 
-    #generate_subgraph(index,storage_dir,noun="朱元璋的有哪些别名")
+    
     # response = get_response(index,queries=["朱元璋的有哪些别名"])
-    response = get_response(index,queries=["贾费是谁"])
+    # response = get_response(index,queries="王熙凤是谁")
+    # print(response)
+    generate_subgraph(index,storage_dir,noun="朱元璋")
