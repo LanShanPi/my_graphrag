@@ -1,12 +1,11 @@
 
 from config import OPENAI_API_KEY1 as OPENAI_API_KEY
-from config import API_BASE2
+from config import API_BASE3
 
 from openai import OpenAI
 client = OpenAI(  
-    api_key=OPENAI_API_KEY, # 此处使用openai官方key，怎么获取本文不讨论
-    base_url=API_BASE2 # "https://api.openai.com/v1" # 既然是直接访问官方站点，这个变量可以不用声明
-)
+    api_key=OPENAI_API_KEY, 
+    base_url=API_BASE3 )
 
 completion = client.chat.completions.create(
     model="gpt-4o",
