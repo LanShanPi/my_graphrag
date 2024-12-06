@@ -114,12 +114,68 @@ def get_config():
     allowed_relation_types = triplet_extraction_template["allowed_relation_types"]
     return allowed_entity_types, allowed_relation_types, CUSTOM_KG_TRIPLET_EXTRACT_PROMPT
 
-# 过滤特定人物的三元组
+# # 过滤特定人物的三元组
+# def filter_triplets_by_person(triplets, person_name):
+#     client = local_openai(  
+#     api_key=OPENAI_API_KEY,
+#     base_url=API_BASE2 
+#         )
+#     completion = client.chat.completions.create(
+#         model="gpt-4o",
+#         messages=[
+#             {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
+#             {"role": "user","content": f"{person_name}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
+#         ]
+#     )
+#     nouns = completion.choices[0].message.content.split("&")[1:-1]
+#     nouns.append(person_name)
+
+#     return [
+#         triplet for triplet in triplets if name in triplet["head"] or name in triplet["tail"] for name in nouns
+#     ]
+
 def filter_triplets_by_person(triplets, person_name):
-    return [
-        triplet for triplet in triplets
-        if person_name in triplet["head"] or person_name in triplet["tail"]
-    ]
+    """
+    根据指定人物名称，过滤三元组，仅保留与该人物及其别名直接相关的三元组。
+    :param triplets: 原始三元组列表
+    :param person_name: 指定的关键人物名称
+    :return: 过滤后的三元组列表
+    """
+    client = local_openai(  
+        api_key=OPENAI_API_KEY,
+        base_url=API_BASE2 
+    )
+    
+    # 使用 GPT 模型获取别名
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
+                {"role": "user", "content": f"{person_name}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
+            ]
+        )
+        # 提取别名列表
+        nouns = completion.choices[0].message.content.split("&")[1:-1]
+    except Exception as e:
+        print(f"Error fetching aliases for {person_name}: {e}")
+        nouns = []
+
+    # 确保原始名称也包含在过滤条件中
+    nouns.append(person_name)
+    nouns = list(set(nouns))  # 去重处理
+
+    # 根据提示词规则进行严格过滤
+    filtered_triplets = []
+    for triplet in triplets:
+        # 仅保留包含目标名称或别名的三元组
+        if any(name in triplet["head"] or name in triplet["tail"] for name in nouns):
+            # 过滤掉无效节点（如情绪、抽象描述等）
+            if triplet["head_type"] not in ["ABSTRACT", "EMOTION"] and triplet["tail_type"] not in ["ABSTRACT", "EMOTION"]:
+                # 保留与指定人物直接相关的三元组
+                filtered_triplets.append(triplet)
+
+    return filtered_triplets
 
 def check_subfolder_exists(parent_folder, subfolder_name):
     """
@@ -133,7 +189,7 @@ def check_subfolder_exists(parent_folder, subfolder_name):
 
 
 
-def generate_knowledge_graph(file_path,file_type,graph_name,storage_dir):
+def generate_knowledge_graph(file_path,file_type,person_name,dir_name,storage_dir):
     # 文件处理和知识图谱构建
     documents = process_file(file_path, file_type)
     chunk_size = 512
@@ -159,7 +215,7 @@ def generate_knowledge_graph(file_path,file_type,graph_name,storage_dir):
         kg_triple_extract_template=CUSTOM_KG_TRIPLET_EXTRACT_PROMPT,
         allowed_entity_types=entity_types,
         allowed_relation_types=relation_types,
-        triplet_filter_fn=lambda triplets: filter_triplets_by_person(triplets, graph_name)
+        triplet_filter_fn=lambda triplets: filter_triplets_by_person(triplets, person_name)
     )
 
     # 存储知识图谱和可视化文件到统一目录
@@ -168,7 +224,7 @@ def generate_knowledge_graph(file_path,file_type,graph_name,storage_dir):
         os.makedirs(index_dir)
     storage_context.persist(persist_dir=index_dir)
     # 生成html文件
-    html_file = os.path.join(storage_dir, f"{graph_name}_graph.html")
+    html_file = os.path.join(storage_dir, f"{dir_name}_graph.html")
     index.property_graph_store.save_networkx_graph(name=html_file)
     print("html文件已生成")
     
@@ -229,9 +285,42 @@ def generate_subgraph(index, store_dir, noun=None):
     print(f"子图已存储到 {os.path.join(store_dir, 'subgraph.html')}")
 
 
+def get_response_v2(index,noun):
+    # 生成noun别的称呼
+    client = local_openai(  
+    api_key=OPENAI_API_KEY,
+    base_url=API_BASE2 
+        )
+    completion = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
+            {"role": "user","content": f"{noun}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
+        ]
+    )
+    nouns = completion.choices[0].message.content.split("&")[1:-1]
+    
+    custom_prompt_str = (
+    f"根据已知的中国历史，按时间顺序罗列<{noun}>的生平大事。需要注意以下几点：\n"
+    f"1. 如果<{noun}>在某些事件中使用其他称呼{nouns}，也需一并罗列。\n"
+    "2. 每个事件需要包含：\n"
+    "   - **时间**：事件发生的具体年份或时间范围。\n"
+    "   - **事件名称**：尽量简洁概括事件内容。\n"
+    "   - **事件过程**：简要描述事件发生的背景及经过。\n"
+    "3. 输出格式严格按照以下格式：\n"
+    "`事件1，时间，事件过程；事件2，时间，事件过程...`\n"
+    "4. 若事件时间不确定，可标注为“未知时间”。\n"
+    )
 
+    full_query = custom_prompt_str
+    # Update the query engine with the custom prompt
+    query_engine = index.as_query_engine(llm=llm, include_text=False)
+    # Query the engine
+    response = query_engine.query(full_query)
 
-def get_response(index,queries):
+    return response
+
+def get_response_v1(index,queries):
     # queries为问题列表
     query_engine = index.as_query_engine(llm=llm, include_text=False)
     # query_engine.set_query_mode("compact")
@@ -242,18 +331,19 @@ def get_response(index,queries):
 if __name__ == "__main__":
     file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/data/明朝那些事儿.pdf"
     file_type = "pdf"
-    graph_name = "mingchao"
+    person_name = "朱元璋"
+    dir_name = "mingchao3"
     
     # 生成存储路径
-    storage_dir = setup_storage_dir(graph_name)
+    storage_dir = setup_storage_dir(dir_name)
     # 若未生成相关图谱，则进行生成，若之前已生成则直接加载
     if not check_subfolder_exists(storage_dir, "index"):
-        index = generate_knowledge_graph(file_path,file_type,graph_name,storage_dir)
+        index = generate_knowledge_graph(file_path,file_type,person_name,dir_name,storage_dir)
     else:
         index = load_knowledge_graph(storage_dir)
 
     
     # response = get_response(index,queries=["朱元璋的有哪些别名"])
-    response = get_response(index,queries="给我按时间顺序罗列朱元璋生平大事，注意朱元璋可能有别的称呼，若一些大事中朱元璋为其他名称则也要罗列，输出格式为：‘事件1，时间，事件过程；事件2，时间，事件过程...’")
+    response = get_response_v2(index,noun="朱元璋")
     print(response)
-    # generate_subgraph(index,storage_dir,noun="朱元璋")
+    generate_subgraph(index,storage_dir,noun="朱元璋")

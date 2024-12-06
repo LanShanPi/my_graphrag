@@ -18,7 +18,7 @@ import fitz  # PyMuPDF
 from config import OPENAI_API_KEY1 as OPENAI_API_KEY
 from config import API_BASE1 as API_BASE
 from config import API_BASE2
-from prompt.prompt import mingchaonaxieshi_v2 as triplet_extraction_template
+from prompt.prompt import hongloumeng as triplet_extraction_template
 from functools import lru_cache
 import networkx as nx
 from matplotlib import pyplot as plt
@@ -264,9 +264,9 @@ def get_response(index,queries):
 
 
 if __name__ == "__main__":
-    file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/data/明朝那些事儿.pdf"
-    file_type = "pdf"
-    graph_name = "mingchao2"
+    file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/data/红.txt"
+    file_type = "txt"
+    graph_name = "hongloumeng"
     
     # 生成存储路径
     storage_dir = setup_storage_dir(graph_name)
@@ -278,6 +278,6 @@ if __name__ == "__main__":
 
     
     # response = get_response(index,queries=["朱元璋的有哪些别名"])
-    # response = get_response(index,queries="王熙凤是谁")
-    # print(response)
-    generate_subgraph(index,storage_dir,noun="朱元璋")
+    response = get_response(index,queries="王熙凤是谁")
+    print(response)
+    # generate_subgraph(index,storage_dir,noun="朱元璋")
