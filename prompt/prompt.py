@@ -91,6 +91,62 @@ mingchaonaxieshi_v2 = {
     ]
 }
 
+mingchaonaxieshi_v3 = {
+    "CUSTOM_KG_TRIPLET_EXTRACT_TMPL":(
+        "从给定文本中提取与明朝历史相关的知识三元组，并补充时间信息。\n"
+        "每个三元组应以 (head, relation, tail) 及其各自的类型形式出现，"
+        "并尽可能添加明确的时间信息；如无明确时间，则进行时间推理。\n"
+        "---------------------\n"
+        "初始本体论：\n"
+        "实体类型：{allowed_entity_types}\n"
+        "关系类型：{allowed_relation_types}\n"
+        "\n"
+        "以这些类型为起点，但根据上下文需要引入新类型。\n"
+        "\n"
+        "指导原则：\n"
+        "1. 输出格式严格为 JSON：[{{'head': '', 'head_type': '', 'relation': '', 'tail': '', 'tail_type': '', 'time': ''}}]\n"
+        "2. 时间提取：\n"
+        "   - 尽可能从文本中提取明确的时间信息（年/月/日）。\n"
+        "   - 如果文本中未明确提及时间，进行时间推理。例如：\n"
+        "     - '1720年朱元璋开始流浪，3年后他成为皇帝' => '1723年朱元璋成为皇帝'\n"
+        "     - '正德年间张居正改革' => 推断具体时间范围（正德年间：1505-1521）。\n"
+        "   - 如果时间推理仍然不明确，标注为“未知时间”。\n"
+        "3. 时间格式：时间字段应为 YYYY-MM-DD 或 YYYY-MM（若缺少日）或 YYYY（若缺少月和日）。\n"
+        "4. 使用最完整的实体名称（例如'朱元璋'而不是'元璋'）。\n"
+        "5. 保持实体简洁（最多 3-5 个词）。\n"
+        "6. 对复杂事件分解为多个三元组。例如：\n"
+        "   - 靖难之役导致了明成祖的登基和明初中央集权的加强 =>\n"
+        "     [\n"
+        "       {{'head': '靖难之役', 'relation': 'RESULTED_IN', 'tail': '明成祖登基', 'tail_type': 'EVENT', 'time': '1402'}},\n"
+        "       {{'head': '靖难之役', 'relation': 'RESULTED_IN', 'tail': '中央集权加强', 'tail_type': 'SOCIAL_SYSTEM', 'time': '1402'}}\n"
+        "     ]\n"
+        "7. 特别关注以下内容：\n"
+        "   - 重要历史事件（如'靖难之役'、'土木堡之变'）。\n"
+        "   - 政策的背景、执行及其影响（如'张居正改革'）。\n"
+        "   - 组织（如'东厂'）和机构（如'内阁'）。\n"
+        "   - 明朝的重要人物（如'朱元璋'、'王阳明'）。\n"
+        "8. 提取事件间的因果关系（如'土木堡之变导致明英宗被俘虏'）。\n"
+        "9. 时间信息若可选推理多个结果，请选择最合理的时间范围，并标注推理来源。\n"
+        "---------------------\n"
+        "文本：{text}\n"
+        "输出：\n"
+    ),
+    "allowed_entity_types":[
+        "PERSON", "EVENT", "POLITICAL_FIGURE", "MILITARY_LEADER",
+        "DYNASTY", "BATTLE", "CAPITAL", "POLICY", "INSTITUTION",
+        "CULTURAL_FIGURE", "ECONOMIC_POLICY", "SOCIAL_SYSTEM",
+        "DATE", "ORGANIZATION"
+    ],
+    "allowed_relation_types":[
+        "FOUNDER", "MEMBER", "GENERAL", "CAPTURED_BY", "SUCCEEDED_BY",
+        "PARTICIPANT", "RESULTED_IN", "IMPLEMENTED", "INFLUENCED_BY",
+        "BORN_IN", "DIED_IN", "ASCENDED_THRONE", "STARTED_REIGN",
+        "ENDED_REIGN", "LED_BATTLE", "DEFEATED", "ESTABLISHED",
+        "DISSOLVED", "EXECUTED", "PROPOSED_POLICY", "IMPACTED"
+    ]
+}
+
+
 hongloumeng = {
     "CUSTOM_KG_TRIPLET_EXTRACT_TMPL":(
                 "从给定的文本中提取多层次的知识三元组，"

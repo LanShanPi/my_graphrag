@@ -18,7 +18,7 @@ import fitz  # PyMuPDF
 from config import OPENAI_API_KEY2 as OPENAI_API_KEY
 from config import API_BASE1 as API_BASE
 from config import API_BASE2
-from prompt.prompt import mingchaonaxieshi_v1 as triplet_extraction_template
+from prompt.prompt import mingchaonaxieshi_v3 as triplet_extraction_template
 from functools import lru_cache
 import networkx as nx
 from matplotlib import pyplot as plt
@@ -239,7 +239,7 @@ def load_knowledge_graph(storage_dir):
 
 
 
-def generate_subgraph(index, store_dir, noun=None):
+def generate_subgraph_v1(index, store_dir, noun=None):
     """
     从原始知识图谱中抽取子图并存储。
     :param index: 知识图谱索引
@@ -278,46 +278,120 @@ def generate_subgraph(index, store_dir, noun=None):
     # 使用pyvis可视化
     net = Network(notebook=True, cdn_resources="in_line", directed=True)
     net.from_nx(G)
-    # # 生成静态图
-    # net.save_graph(os.path.join(store_dir, "static_subgraph.html"))
     # 生成动态图
     net.show(os.path.join(store_dir, "subgraph.html"))
     print(f"子图已存储到 {os.path.join(store_dir, 'subgraph.html')}")
 
 
-def get_response_v2(index,noun):
-    # 生成noun别的称呼
-    client = local_openai(  
-    api_key=OPENAI_API_KEY,
-    base_url=API_BASE2 
-        )
+
+def generate_subgraph_v2(index, store_dir, noun=None):
+    """
+    从原始知识图谱中抽取子图并存储。
+    :param index: 知识图谱索引
+    :param store_dir: 存储路径
+    :param noun: 查询的名词
+    """
+    # 生成 noun 的别称
+    client = local_openai(
+        api_key=OPENAI_API_KEY,
+        base_url=API_BASE2
+    )
     completion = client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
-            {"role": "user","content": f"{noun}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
+            {"role": "user", "content": f"{noun}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
         ]
     )
     nouns = completion.choices[0].message.content.split("&")[1:-1]
+    nouns.append(noun)
+
+    # 从知识图谱中直接检索与名词相关的三元组
+    triplets = list(index.property_graph_store.get_triplets(entity_names=nouns))
+    if not triplets:
+        print(f"未找到与名词 '{noun}' 相关的三元组。请检查名词是否存在于知识图谱中。")
+        return
+
+    # 定义要保留的关系类型和实体类型
+    allowed_relation_types = {
+        "RESULTED_IN", "INFLUENCED_BY", "PARTICIPANT", "IMPLEMENTED",
+        "FOUNDER", "SUCCEEDED_BY", "ASCENDED_THRONE", "LED_BATTLE", "DEFEATED"
+    }
+    allowed_entity_types = {"PERSON", "EVENT", "POLITICAL_FIGURE", "MILITARY_LEADER"}
     
-    custom_prompt_str = (
-    f"根据已知的中国历史，按时间顺序罗列<{noun}>的生平大事。需要注意以下几点：\n"
-    f"1. 如果<{noun}>在某些事件中使用其他称呼{nouns}，也需一并罗列。\n"
-    "2. 每个事件需要包含：\n"
-    "   - **时间**：事件发生的具体年份或时间范围。\n"
-    "   - **事件名称**：尽量简洁概括事件内容。\n"
-    "   - **事件过程**：简要描述事件发生的背景及经过。\n"
-    "3. 输出格式严格按照以下格式：\n"
-    "`事件1，时间，事件过程；事件2，时间，事件过程...`\n"
-    "4. 若事件时间不确定，可标注为“未知时间”。\n"
+    # 过滤三元组
+    filtered_triplets = []
+    for subj, rel, obj in triplets:
+        if (
+            rel.label in allowed_relation_types and
+            subj.type in allowed_entity_types and
+            obj.type in allowed_entity_types
+        ):
+            filtered_triplets.append((subj, rel, obj))
+    
+    # 如果过滤后没有三元组，输出提示
+    if not filtered_triplets:
+        print(f"未找到与名词 '{noun}' 相关的历史事迹或重要人物。")
+        return
+
+    # 创建 NetworkX 图
+    G = nx.DiGraph()
+    for subj, rel, obj in filtered_triplets:
+        G.add_node(subj.id, label=subj.name or f"节点-{subj.id}")
+        G.add_node(obj.id, label=obj.name or f"节点-{obj.id}")
+        G.add_edge(subj.id, obj.id, label=rel.label or f"关系-{rel.id}")
+
+    # 使用 pyvis 可视化
+    net = Network(notebook=True, cdn_resources="in_line", directed=True)
+    net.from_nx(G)
+
+    # 保存图形
+    output_file = os.path.join(store_dir, "subgraph.html")
+    net.show(output_file)
+    print(f"子图已存储到 {output_file}")
+
+
+
+def get_response_v2(index, noun):
+    # Step 1: 生成 noun 的别称
+    client = local_openai(  
+        api_key=OPENAI_API_KEY,
+        base_url=API_BASE2 
     )
-
+    
+    # 请求生成别称
+    completion = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
+            {"role": "user", "content": f"{noun}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
+        ]
+    )
+    
+    # 提取别称并清理格式
+    nouns = completion.choices[0].message.content.split("&")[1:-1]
+    
+    # Step 2: 构造提示词
+    nouns_list_str = "、".join(nouns)  # 将别称转换为易读格式
+    custom_prompt_str = (
+        f"根据已知的中国历史，按时间顺序罗列<{noun}>的生平大事。需要注意以下几点：\n"
+        f"1. 包括与<{noun}>及其其他称呼（{nouns_list_str}）相关的所有事件。\n"
+        "2. 每个事件需要包含：\n"
+        "   - **时间**：事件发生的具体年份或时间范围。\n"
+        "   - **事件名称**：尽量简洁概括事件内容。\n"
+        "   - **事件过程**：简要描述事件发生的背景及经过。\n"
+        "3. 输出格式严格按照以下格式：\n"
+        "`事件1，时间，事件过程；事件2，时间，事件过程...`\n"
+        "4. 若事件时间不确定，可标注为“未知时间”。\n"
+    )
+    
+    # Step 3: 执行查询
     full_query = custom_prompt_str
-    # Update the query engine with the custom prompt
+    
+    # 创建查询引擎并查询
     query_engine = index.as_query_engine(llm=llm, include_text=False)
-    # Query the engine
     response = query_engine.query(full_query)
-
+    
     return response
 
 def get_response_v1(index,queries):
@@ -346,4 +420,4 @@ if __name__ == "__main__":
     # response = get_response(index,queries=["朱元璋的有哪些别名"])
     response = get_response_v2(index,noun="朱元璋")
     print(response)
-    generate_subgraph(index,storage_dir,noun="朱元璋")
+    generate_subgraph_v2(index,storage_dir,noun="朱元璋")
