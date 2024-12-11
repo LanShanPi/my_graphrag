@@ -16,15 +16,20 @@ import re
 from docx import Document as DocxDocument
 import fitz  # PyMuPDF
 from config import OPENAI_API_KEY2 as OPENAI_API_KEY
-from config import API_BASE1 as API_BASE
+from config import API_BASE3 as API_BASE
 from config import API_BASE2
-from prompt.prompt import mingchaonaxieshi_v3 as triplet_extraction_template
+from prompt.prompt import mingchaonaxieshi_v4 as triplet_extraction_template
 from functools import lru_cache
 import networkx as nx
 from matplotlib import pyplot as plt
 from llama_index.core.schema import Node
 from llama_index.core.schema import MediaResource
 from openai import OpenAI as local_openai
+
+import os
+import re
+from llama_index.core.extractors import BaseExtractor
+from llama_index.core.ingestion import IngestionPipeline
 
 
 # 设置 OpenAI API
@@ -114,69 +119,6 @@ def get_config():
     allowed_relation_types = triplet_extraction_template["allowed_relation_types"]
     return allowed_entity_types, allowed_relation_types, CUSTOM_KG_TRIPLET_EXTRACT_PROMPT
 
-# # 过滤特定人物的三元组
-# def filter_triplets_by_person(triplets, person_name):
-#     client = local_openai(  
-#     api_key=OPENAI_API_KEY,
-#     base_url=API_BASE2 
-#         )
-#     completion = client.chat.completions.create(
-#         model="gpt-4o",
-#         messages=[
-#             {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
-#             {"role": "user","content": f"{person_name}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
-#         ]
-#     )
-#     nouns = completion.choices[0].message.content.split("&")[1:-1]
-#     nouns.append(person_name)
-
-#     return [
-#         triplet for triplet in triplets if name in triplet["head"] or name in triplet["tail"] for name in nouns
-#     ]
-
-def filter_triplets_by_person(triplets, person_name):
-    """
-    根据指定人物名称，过滤三元组，仅保留与该人物及其别名直接相关的三元组。
-    :param triplets: 原始三元组列表
-    :param person_name: 指定的关键人物名称
-    :return: 过滤后的三元组列表
-    """
-    client = local_openai(  
-        api_key=OPENAI_API_KEY,
-        base_url=API_BASE2 
-    )
-    
-    # 使用 GPT 模型获取别名
-    try:
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
-                {"role": "user", "content": f"{person_name}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
-            ]
-        )
-        # 提取别名列表
-        nouns = completion.choices[0].message.content.split("&")[1:-1]
-    except Exception as e:
-        print(f"Error fetching aliases for {person_name}: {e}")
-        nouns = []
-
-    # 确保原始名称也包含在过滤条件中
-    nouns.append(person_name)
-    nouns = list(set(nouns))  # 去重处理
-
-    # 根据提示词规则进行严格过滤
-    filtered_triplets = []
-    for triplet in triplets:
-        # 仅保留包含目标名称或别名的三元组
-        if any(name in triplet["head"] or name in triplet["tail"] for name in nouns):
-            # 过滤掉无效节点（如情绪、抽象描述等）
-            if triplet["head_type"] not in ["ABSTRACT", "EMOTION"] and triplet["tail_type"] not in ["ABSTRACT", "EMOTION"]:
-                # 保留与指定人物直接相关的三元组
-                filtered_triplets.append(triplet)
-
-    return filtered_triplets
-
 def check_subfolder_exists(parent_folder, subfolder_name):
     """
     检查指定文件夹中是否存在某个子文件夹
@@ -189,25 +131,94 @@ def check_subfolder_exists(parent_folder, subfolder_name):
 
 
 
-def generate_knowledge_graph(file_path,file_type,person_name,dir_name,storage_dir):
-    # 文件处理和知识图谱构建
+
+# 添加时间提取的正则表达式
+def extract_time_entities(text):
+    patterns = [
+        r'\d{4}年',                # 例如：1254年
+        r'\d{1,2}月\d{1,2}日',      # 例如：5月15日
+        r'\d{1,2}世纪',             # 例如：13世纪
+        r'\d{4}-\d{2}-\d{2}',      # 例如：1368-01-23
+        r'\d{4}',                  # 例如：1254
+        r'永乐|洪武|嘉靖|万历|正德年间'  # 明朝常见年号
+    ]
+    matches = []
+    for pattern in patterns:
+        matches.extend(re.findall(pattern, text))
+    return matches
+
+# 修改 TimeExtractor 类
+class TimeExtractor(BaseExtractor):
+    async def aextract(self, nodes):
+        metadata_list = []
+        for node in nodes:
+            time_entities = extract_time_entities(node.text)
+            metadata_list.append({"time_entities": time_entities})
+        return metadata_list
+
+# 修改 filter_triplets_by_person 方法，加入时间处理
+def filter_triplets_by_person(triplets, person_name):
+    client = local_openai(  
+        api_key=OPENAI_API_KEY,
+        base_url=API_BASE2 
+    )
+    
+    # 使用 GPT 获取别名
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
+                {"role": "user", "content": f"{person_name}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
+            ]
+        )
+        nouns = completion.choices[0].message.content.split("&")[1:-1]
+    except Exception as e:
+        print(f"Error fetching aliases for {person_name}: {e}")
+        nouns = []
+
+    # 包含原始名称
+    nouns.append(person_name)
+    nouns = list(set(nouns))
+
+    # 过滤三元组
+    filtered_triplets = []
+    for triplet in triplets:
+        if any(name in triplet["head"] or name in triplet["tail"] for name in nouns):
+            # 如果缺少时间信息，尝试补充
+            if "time" not in triplet or not triplet["time"]:
+                time_entities = extract_time_entities(triplet.get("context", ""))
+                triplet["time"] = time_entities[0] if time_entities else "未知时间"
+            filtered_triplets.append(triplet)
+
+    return filtered_triplets
+
+def generate_knowledge_graph(file_path, file_type, person_name, dir_name, storage_dir):
+    # File processing and knowledge graph construction
     documents = process_file(file_path, file_type)
-    chunk_size = 512
-    overlap = 50
+    chunk_size = 2014
+    overlap = 100
     chunked_documents = []
     for doc in documents:
         text_chunks = chunk_text_with_overlap(doc.text, chunk_size, overlap)
         for chunk in text_chunks:
             chunked_documents.append(Document(text=chunk, extra_info=doc.extra_info))
 
-    # 加载模板
+    # Load templates
     entity_types, relation_types, CUSTOM_KG_TRIPLET_EXTRACT_PROMPT = get_config()
-    # 创建存储上下文
+
+    # Create storage context
     graph_store = SimpleGraphStore()
     storage_context = StorageContext.from_defaults(graph_store=graph_store)
-    # 构建针对特定人物的知识图谱
+
+    # Add custom time extractor to the pipeline
+    transformations = [TimeExtractor()]
+    pipeline = IngestionPipeline(transformations=transformations)
+    nodes = pipeline.run(documents=chunked_documents)
+
+    # Build knowledge graph
     index = PropertyGraphIndex.from_documents(
-        chunked_documents,
+        nodes,
         max_triplets_per_chunk=10,
         storage_context=storage_context,
         show_progress=True,
@@ -215,19 +226,37 @@ def generate_knowledge_graph(file_path,file_type,person_name,dir_name,storage_di
         kg_triple_extract_template=CUSTOM_KG_TRIPLET_EXTRACT_PROMPT,
         allowed_entity_types=entity_types,
         allowed_relation_types=relation_types,
-        triplet_filter_fn=lambda triplets: filter_triplets_by_person(triplets, person_name)
     )
 
-    # 存储知识图谱和可视化文件到统一目录
+    # Store knowledge graph and visualization files
     index_dir = os.path.join(storage_dir, "index")
     if not os.path.exists(index_dir):
         os.makedirs(index_dir)
     storage_context.persist(persist_dir=index_dir)
-    # 生成html文件
+
+    # Convert knowledge graph to NetworkX graph
+    G = nx.DiGraph()
+    for triplet in index.property_graph_store.get_triplets():
+        subj = triplet["head"]
+        obj = triplet["tail"]
+        rel = triplet["relation"]
+        time = triplet.get("time", "未知时间")  # Get time or set default
+        
+        # Add nodes and edges to the graph
+        G.add_node(subj, label=subj)
+        G.add_node(obj, label=obj)
+        # Add time to the edge label
+        G.add_edge(subj, obj, label=f"{rel} ({time})")
+
+    # Visualize with pyvis
+    net = Network(notebook=True, cdn_resources="in_line", directed=True)
+    net.from_nx(G)
+
+    # Save HTML file
     html_file = os.path.join(storage_dir, f"{dir_name}_graph.html")
-    index.property_graph_store.save_networkx_graph(name=html_file)
-    print("html文件已生成")
-    
+    net.show(html_file)
+    print(f"HTML file has been generated: {html_file}")
+
     return index
 
 def load_knowledge_graph(storage_dir):
@@ -238,8 +267,7 @@ def load_knowledge_graph(storage_dir):
     return index
 
 
-
-def generate_subgraph_v1(index, store_dir, noun=None):
+def generate_subgraph(index, store_dir, noun=None):
     """
     从原始知识图谱中抽取子图并存储。
     :param index: 知识图谱索引
@@ -283,117 +311,6 @@ def generate_subgraph_v1(index, store_dir, noun=None):
     print(f"子图已存储到 {os.path.join(store_dir, 'subgraph.html')}")
 
 
-
-def generate_subgraph_v2(index, store_dir, noun=None):
-    """
-    从原始知识图谱中抽取子图并存储。
-    :param index: 知识图谱索引
-    :param store_dir: 存储路径
-    :param noun: 查询的名词
-    """
-    # 生成 noun 的别称
-    client = local_openai(
-        api_key=OPENAI_API_KEY,
-        base_url=API_BASE2
-    )
-    completion = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
-            {"role": "user", "content": f"{noun}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
-        ]
-    )
-    nouns = completion.choices[0].message.content.split("&")[1:-1]
-    nouns.append(noun)
-
-    # 从知识图谱中直接检索与名词相关的三元组
-    triplets = list(index.property_graph_store.get_triplets(entity_names=nouns))
-    if not triplets:
-        print(f"未找到与名词 '{noun}' 相关的三元组。请检查名词是否存在于知识图谱中。")
-        return
-
-    # 定义要保留的关系类型和实体类型
-    allowed_relation_types = {
-        "RESULTED_IN", "INFLUENCED_BY", "PARTICIPANT", "IMPLEMENTED",
-        "FOUNDER", "SUCCEEDED_BY", "ASCENDED_THRONE", "LED_BATTLE", "DEFEATED"
-    }
-    allowed_entity_types = {"PERSON", "EVENT", "POLITICAL_FIGURE", "MILITARY_LEADER"}
-    
-    # 过滤三元组
-    filtered_triplets = []
-    for subj, rel, obj in triplets:
-        if (
-            rel.label in allowed_relation_types and
-            subj.type in allowed_entity_types and
-            obj.type in allowed_entity_types
-        ):
-            filtered_triplets.append((subj, rel, obj))
-    
-    # 如果过滤后没有三元组，输出提示
-    if not filtered_triplets:
-        print(f"未找到与名词 '{noun}' 相关的历史事迹或重要人物。")
-        return
-
-    # 创建 NetworkX 图
-    G = nx.DiGraph()
-    for subj, rel, obj in filtered_triplets:
-        G.add_node(subj.id, label=subj.name or f"节点-{subj.id}")
-        G.add_node(obj.id, label=obj.name or f"节点-{obj.id}")
-        G.add_edge(subj.id, obj.id, label=rel.label or f"关系-{rel.id}")
-
-    # 使用 pyvis 可视化
-    net = Network(notebook=True, cdn_resources="in_line", directed=True)
-    net.from_nx(G)
-
-    # 保存图形
-    output_file = os.path.join(store_dir, "subgraph.html")
-    net.show(output_file)
-    print(f"子图已存储到 {output_file}")
-
-
-
-def get_response_v2(index, noun):
-    # Step 1: 生成 noun 的别称
-    client = local_openai(  
-        api_key=OPENAI_API_KEY,
-        base_url=API_BASE2 
-    )
-    
-    # 请求生成别称
-    completion = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
-            {"role": "user", "content": f"{noun}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
-        ]
-    )
-    
-    # 提取别称并清理格式
-    nouns = completion.choices[0].message.content.split("&")[1:-1]
-    
-    # Step 2: 构造提示词
-    nouns_list_str = "、".join(nouns)  # 将别称转换为易读格式
-    custom_prompt_str = (
-        f"根据已知的中国历史，按时间顺序罗列<{noun}>的生平大事。需要注意以下几点：\n"
-        f"1. 包括与<{noun}>及其其他称呼（{nouns_list_str}）相关的所有事件。\n"
-        "2. 每个事件需要包含：\n"
-        "   - **时间**：事件发生的具体年份或时间范围。\n"
-        "   - **事件名称**：尽量简洁概括事件内容。\n"
-        "   - **事件过程**：简要描述事件发生的背景及经过。\n"
-        "3. 输出格式严格按照以下格式：\n"
-        "`事件1，时间，事件过程；事件2，时间，事件过程...`\n"
-        "4. 若事件时间不确定，可标注为“未知时间”。\n"
-    )
-    
-    # Step 3: 执行查询
-    full_query = custom_prompt_str
-    
-    # 创建查询引擎并查询
-    query_engine = index.as_query_engine(llm=llm, include_text=False)
-    response = query_engine.query(full_query)
-    
-    return response
-
 def get_response_v1(index,queries):
     # queries为问题列表
     query_engine = index.as_query_engine(llm=llm, include_text=False)
@@ -401,12 +318,73 @@ def get_response_v1(index,queries):
     response = query_engine.query(queries)
     return response
 
+# 修改 get_response_v1 方法
+def get_response_v2(index, noun):
+    client = local_openai(  
+        api_key=OPENAI_API_KEY,
+        base_url=API_BASE2 
+    )
+    completion = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "根据你对中国历史古籍的理解，回答问题"},
+                {"role": "user", "content": f"{noun}有哪些别的称呼，请尽可能全面的罗列，显示格式为：&名字1&名字2...名字n&"}
+            ]
+        )
+    nouns = completion.choices[0].message.content.split("&")[1:-1]
+    question1 = f"根据提供的内容，请编写人物：{noun} 的生平，另外 {noun} 这个人物还有其他的称呼，如 {nouns}，在总结时若出现也要进行总结，要求如下：\
+                ### 输出要求：\
+                1. 按照时间顺序列出事件，从出生到逝世，涵盖其一生中的重要事件和成就。\
+                2. 要尽可能详细的总结所有的生平时间。\
+                3. 每个事件包括以下内容：\
+                - 时间：事件发生的具体年份或时间范围（如 '1368年' 或 '1370-1380年'）。\
+                - 事件名称：简单描述事件的主题（如 '建立明朝' 或 '靖难之役'）。\
+                - 事件描述：简单说明事件的背景、经过及意义。\
+                4. 使用正式的语言，清晰且简洁地描述。\
+                5. 如果有模糊的时间（如 '洪武年间' 或 '明初'），请结合上下文推理具体时间范围。\
+                6. 输出格式严格为如下结构：\
+                    时间：XXXX年\
+                    事件名称：XXXXX\
+                    事件描述：XXXXX\
+                "
+    question2 = f"根据提供的内容，请编写人物：{noun} 的生平，另外 {noun} 这个人物还有其他的称呼，如 {nouns}，在总结时若出现也要进行总结，要求如下：\
+                ### 输出要求：\
+                1. 按照时间顺序列出事件，从出生到逝世，涵盖其一生中的重要事件和成就。\
+                2. 要尽可能详细地总结所有的生平事件。\
+                3. 要尽可能详细的总结与{noun}相关的所有重要人物。\
+                3. 每个事件包括以下内容：\
+                - 时间：事件发生的具体年份或时间范围（如 '1368年' 或 '1370-1380年'）。\
+                - 事件名称：简单描述事件的主题（如 '建立明朝' 或 '靖难之役'）。\
+                - 事件描述：简单说明事件的背景、经过及意义。\
+                4. 罗列与 {noun} 相关的重要人物，并总结其关系及相关事件，具体格式如下：\
+                - 人物：相关人物的名字\
+                - 关系：与 {noun} 的关系（如'师徒'、'敌对'、'同盟'等）。\
+                - 相关事件：与此人物有关的重要事件，包含事件名称和简要描述。\
+                5. 使用正式的语言，清晰且简洁地描述。\
+                6. 如果有模糊的时间（如 '洪武年间' 或 '明初'），请结合上下文推理具体时间范围。\
+                7. 输出格式严格为如下结构：\
+                    #### 人物生平：\
+                    时间：XXXX年\
+                    事件名称：XXXXX\
+                    事件描述：XXXXX\
+                    #### 相关重要人物：\
+                    人物：XXXXX\
+                    关系：XXXXX\
+                    相关事件：\
+                    - 事件名称：XXXXX\
+                    - 事件描述：XXXXX\
+                " 
+    # queries为问题列表
+    query_engine = index.as_query_engine(llm=llm, include_text=False)
+    # query_engine.set_query_mode("compact")
+    response = query_engine.query(question2)
+    return response
 
 if __name__ == "__main__":
-    file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/data/明朝那些事儿.pdf"
+    file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/data/明朝的那些事儿.pdf"
     file_type = "pdf"
     person_name = "朱元璋"
-    dir_name = "mingchao3"
+    dir_name = "mingchao4"
     
     # 生成存储路径
     storage_dir = setup_storage_dir(dir_name)
@@ -418,6 +396,7 @@ if __name__ == "__main__":
 
     
     # response = get_response(index,queries=["朱元璋的有哪些别名"])
-    response = get_response_v2(index,noun="朱元璋")
+    response = get_response_v1(index,"朱元璋一共活了多少岁")
+    # response = get_response_v2(index,"朱元璋")
     print(response)
-    generate_subgraph_v2(index,storage_dir,noun="朱元璋")
+    # generate_subgraph(index,storage_dir,noun="朱元璋")

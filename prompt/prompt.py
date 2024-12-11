@@ -146,6 +146,49 @@ mingchaonaxieshi_v3 = {
     ]
 }
 
+mingchaonaxieshi_v4 = {
+    "CUSTOM_KG_TRIPLET_EXTRACT_TMPL":(
+        "从给定文本中提取与明朝历史相关的知识三元组，并补充时间信息。\n"
+        "每个三元组应以 (head, relation, tail) 及其各自的类型形式出现，"
+        "并尽可能添加明确的时间信息；如无明确时间，则进行时间推理。\n"
+        "---------------------\n"
+        "初始本体论：\n"
+        "实体类型：{allowed_entity_types}\n"
+        "关系类型：{allowed_relation_types}\n"
+        "\n"
+        "指导原则：\n"
+        "1. 输出格式严格为 JSON：[{{'head': '', 'head_type': '', 'relation': '', 'tail': '', 'tail_type': '', 'time': ''}}]\n"
+        "2. 时间提取：\n"
+        "   - 时间字段是三元组中的核心部分。\n"
+        "   - 提取时间信息时，请遵循以下顺序：\n"
+        "     a. 从原文中提取明确的时间表达（如年份、具体日期）。\n"
+        "     b. 进行时间推理，例如：\n"
+        "        - '1720年朱元璋开始流浪，3年后他成为皇帝' => '1723年朱元璋成为皇帝'\n"
+        "        - '正德年间张居正改革' => 推断时间范围为 '1505-1521'。\n"
+        "        - 如果涉及模糊时间（如“明初”），根据背景知识推断具体时间范围。\n"
+        "     c. 如果时间推理仍不明确，则标注为“未知时间”。\n"
+        "   - 时间字段应优先使用 ISO 格式：YYYY-MM-DD 或 YYYY-MM（若缺少日）或 YYYY（若缺少月和日）。\n"
+        "   - 所有涉及动态事件的时间都必须标注。\n"
+        "---------------------\n"
+        "文本：{text}\n"
+        "输出：\n"
+    ),
+    "allowed_entity_types":[
+        "PERSON", "EVENT", "POLITICAL_FIGURE", "MILITARY_LEADER",
+        "DYNASTY", "BATTLE", "CAPITAL", "POLICY", "INSTITUTION",
+        "CULTURAL_FIGURE", "ECONOMIC_POLICY", "SOCIAL_SYSTEM",
+        "DATE", "PERIOD", "TIMELINE", "ORGANIZATION"
+    ],
+    "allowed_relation_types":[
+        "FOUNDER", "MEMBER", "GENERAL", "CAPTURED_BY", "SUCCEEDED_BY",
+        "PARTICIPANT", "RESULTED_IN", "IMPLEMENTED", "INFLUENCED_BY",
+        "BORN_IN", "DIED_IN", "ASCENDED_THRONE", "STARTED_REIGN",
+        "ENDED_REIGN", "LED_BATTLE", "DEFEATED", "ESTABLISHED",
+        "DISSOLVED", "EXECUTED", "PROPOSED_POLICY", "IMPACTED",
+        "OCCURRED_IN", "DURATION", "HAPPENED_BEFORE", "HAPPENED_AFTER"
+    ]
+}
+
 
 hongloumeng = {
     "CUSTOM_KG_TRIPLET_EXTRACT_TMPL":(
