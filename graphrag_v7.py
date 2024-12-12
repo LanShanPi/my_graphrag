@@ -30,7 +30,7 @@ import os
 import re
 from llama_index.core.extractors import BaseExtractor
 from llama_index.core.ingestion import IngestionPipeline
-
+from llama_index.core.vector_stores.types import MetadataFilters, ExactMatchFilter
 
 # 设置 OpenAI API
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
@@ -312,10 +312,49 @@ def generate_subgraph(index, store_dir, noun=None):
 
 
 def get_response_v1(index,queries):
-    # queries为问题列表
-    query_engine = index.as_query_engine(llm=llm, include_text=False)
-    # query_engine.set_query_mode("compact")
+    # 查询索引
+    # include_text 用途：决定在查询结果中是否包含原始文本。
+    # True：当设置为 True 时，查询结果将包含与匹配的三元组相关的完整文本块。这对于需要查看上下文或详细信息的应用场景非常有用。
+    # False：当设置为 False 时，查询结果只包含匹配的三元组，而不包括完整的文本块。这可以减少返回的数据量，提高查询速度。
+    ######
+    # response_mode 用途：指定如何生成和组织查询响应。
+    # tree_summarize：在这种模式下，系统会递归地构建一个树状结构来总结查询结果。这种模式适用于需要对大量信息进行总结的场景。
+    # 工作原理：tree_summarize 会将所有相关的文本块合并，并通过多次调用 LLM 来生成一个总结，最终返回一个简洁的响应。
+    # 适用场景：适合需要高层次总结的场景，结果更全面，但是速度可能慢
+
+    # refine 模式用途：用于逐步改进和细化响应。
+    # 工作原理：在 refine 模式下，系统会首先使用第一个文本块和查询生成一个初始答案。然后，它会将这个答案与下一个文本块结合，再次生成一个改进的答案。这个过程会持续进行，直到所有文本块都被处理完毕。
+    # 适用场景：适合需要详细和精确答案的场景，因为它会逐步整合所有相关信息。
+
+    # compact 模式用途：用于在生成响应之前合并文本块，以减少对 LLM 的调用次数。
+    # 工作原理：在 compact 模式下，系统会尽可能多地将文本块合并到一个上下文窗口中，然后生成响应。这种方法减少了对 LLM 的调用次数，因为它在合并后的文本上进行处理。
+    # 适用场景：适合需要快速响应的场景，因为它通过减少 LLM 调用次数来提高效率。
+
+    # 这两种模式各有优劣，refine 提供更详细的答案，而 compact 提供更快的响应速度。
+
+    # vector_store_query_mode：指定向量存储查询的模式，通常用于选择不同的向量检索策略。
+        # DEFAULT：默认的向量搜索模式，通常用于基于向量相似度的检索。
+        # SPARSE：稀疏向量搜索模式，适用于稀疏数据的检索。
+        # HYBRID：混合搜索模式，结合了向量相似度和文本搜索。
+        # TEXT_SEARCH：全文本搜索模式，基于文本内容进行检索。
+        # SEMANTIC_HYBRID：语义混合模式，结合语义理解和向量相似度。
+
+    # filters：用于在查询时应用元数据过滤器。可以根据文档的元数据（如作者、日期等）来筛选符合条件的节点。
+
+    # # 定义元数据过滤器（只检索作者为“历史学家”在2023年的记录，key的值要根据原数据中的标记来设置，查看原数据中的标签暂未写）####
+    # filters = MetadataFilters(
+    #                 filters=[
+    #                     ExactMatchFilter(key="author", value="历史学家"),
+    #                     ExactMatchFilter(key="year", value=2023)
+    #                     ]
+    #                     )
+
+    query_engine = index.as_query_engine(llm=llm, include_text=True,response_mode="tree_summarize",similarity_top_k=5)
     response = query_engine.query(queries)
+    for idx, source in enumerate(response.source_nodes):
+        # 使用 get_content() 方法获取节点内容
+        print("[Source] " + str(idx) + ": ", source.node.get_content())
+
     return response
 
 # 修改 get_response_v1 方法
@@ -376,7 +415,6 @@ def get_response_v2(index, noun):
                 " 
     # queries为问题列表
     query_engine = index.as_query_engine(llm=llm, include_text=False)
-    # query_engine.set_query_mode("compact")
     response = query_engine.query(question2)
     return response
 
@@ -398,5 +436,6 @@ if __name__ == "__main__":
     # response = get_response(index,queries=["朱元璋的有哪些别名"])
     response = get_response_v1(index,"朱元璋一共活了多少岁")
     # response = get_response_v2(index,"朱元璋")
+    print("################")
     print(response)
     # generate_subgraph(index,storage_dir,noun="朱元璋")
