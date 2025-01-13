@@ -1,11 +1,11 @@
 
-from config import OPENAI_API_KEY1 as OPENAI_API_KEY
-from config import API_BASE2
+from config import OPENAI_API_KEY2 as OPENAI_API_KEY
+from config import API_BASE1
 
 from openai import OpenAI
 client = OpenAI(  
     api_key=OPENAI_API_KEY, 
-    base_url=API_BASE2
+    base_url=API_BASE1
      )
 
 completion = client.chat.completions.create(

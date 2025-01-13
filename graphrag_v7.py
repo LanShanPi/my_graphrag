@@ -15,8 +15,8 @@ from llama_index.core.schema import Document
 import re
 from docx import Document as DocxDocument
 import fitz  # PyMuPDF
-from config import OPENAI_API_KEY2 as OPENAI_API_KEY
-from config import API_BASE3 as API_BASE
+from config import OPENAI_API_KEY1 as OPENAI_API_KEY
+from config import API_BASE1 as API_BASE
 from config import API_BASE2
 from prompt.prompt import mingchaonaxieshi_v4 as triplet_extraction_template
 from functools import lru_cache
@@ -28,7 +28,8 @@ from openai import OpenAI as local_openai
 
 import os
 import re
-from llama_index.core.extractors import BaseExtractor
+# from llama_index.core.extractors import BaseExtractor
+from llama_index.core.extractors.metadata_extractors import BaseExtractor
 from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.vector_stores.types import MetadataFilters, ExactMatchFilter
 
@@ -419,10 +420,10 @@ def get_response_v2(index, noun):
     return response
 
 if __name__ == "__main__":
-    file_path = "/home/share/shucshqyfzyxgsi/home/lishuguang/my_graphrag/data/明朝的那些事儿.pdf"
+    file_path = "/home/xingzai/hzl/my_graphrag/data/明朝的那些事儿.pdf"
     file_type = "pdf"
     person_name = "朱元璋"
-    dir_name = "mingchao4"
+    dir_name = "mingchao"
     
     # 生成存储路径
     storage_dir = setup_storage_dir(dir_name)
