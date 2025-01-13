@@ -1,10 +1,8 @@
 
-from config import OPENAI_API_KEY2 as OPENAI_API_KEY
-from config import API_BASE1
 
 from openai import OpenAI
 client = OpenAI(  
-    api_key=OPENAI_API_KEY, 
+    api_key=OPENAI_API_KEY1, 
     base_url=API_BASE1
      )
 
