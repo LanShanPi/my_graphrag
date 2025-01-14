@@ -152,6 +152,31 @@ class TimeExtractor(BaseExtractor):
             metadata_list.append({"time_entities": time_entities})
         return metadata_list
 
+def update_knowledge_graph_with_new_file(index, storage_context, file_path, file_type):
+    """
+    更新知识图谱，将新文件的知识添加到已有索引中。
+    """
+    documents = process_file(file_path, file_type)
+    # 创建新的节点
+    chunk_size = 2014
+    overlap = 100
+    chunked_documents = []
+    for doc in documents:
+        text_chunks = chunk_text_with_overlap(doc.text, chunk_size, overlap)
+        for chunk in text_chunks:
+            chunked_documents.append(Document(text=chunk, extra_info=doc.extra_info))
+    
+    # 提取三元组并添加到现有索引
+    transformations = [TimeExtractor()]
+    pipeline = IngestionPipeline(transformations=transformations)
+    new_nodes = pipeline.run(documents=chunked_documents)
+
+    index.add_documents(new_nodes)
+    storage_context.persist()  # 保存更新后的图谱
+
+    print("知识图谱已更新！")
+    return index
+
 
 def generate_knowledge_graph(file_path, file_type, person_name, dir_name, storage_dir):
     # File processing and knowledge graph construction
@@ -224,7 +249,7 @@ def load_knowledge_graph(storage_dir):
     print("已存在相关知识库")
     storage_context = StorageContext.from_defaults(persist_dir=storage_dir+"/"+"index")
     index = load_index_from_storage(storage_context)
-    return index
+    return index,storage_context
 
 
 def generate_subgraph(index, store_dir, noun=None):
@@ -351,7 +376,7 @@ if __name__ == "__main__":
     if not check_subfolder_exists(storage_dir, "index"):
         index = generate_knowledge_graph(file_path,file_type,person_name,dir_name,storage_dir)
     else:
-        index = load_knowledge_graph(storage_dir)
+        index,storage_context = load_knowledge_graph(storage_dir)
 
     
     response = get_response_v1(index,"朱元璋一共活了多少岁")
@@ -359,3 +384,6 @@ if __name__ == "__main__":
     print("################")
     print(response)
     # generate_subgraph(index,storage_dir,noun="朱元璋")
+
+    # 向已有图谱中添加新内容
+    # update_knowledge_graph_with_new_file(index, storage_context, file_path, file_type)
