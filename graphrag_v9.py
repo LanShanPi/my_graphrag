@@ -14,7 +14,7 @@ import re
 from docx import Document as DocxDocument
 import fitz  # PyMuPDF
 from config import OPENAI_API_KEY1 as OPENAI_API_KEY
-from config import API_BASE1 as API_BASE
+from config import API_BASE3 as API_BASE
 from config import API_BASE2
 from prompt.prompt import mingchaonaxieshi_v4 as triplet_extraction_template
 from functools import lru_cache
@@ -31,7 +31,7 @@ from llama_index.core.ingestion import IngestionPipeline
 
 # 设置 OpenAI API
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-openai.api_key = os.environ["OPENAI_API_KEY"]
+openai.api_key = OPENAI_API_KEY # os.environ["OPENAI_API_KEY"]
 openai.api_base = API_BASE
 
 # 配置 GPU/CPU 设备
@@ -158,7 +158,7 @@ def update_knowledge_graph_with_new_file(index, storage_context, file_path, file
     """
     documents = process_file(file_path, file_type)
     # 创建新的节点
-    chunk_size = 2014
+    chunk_size = 1024
     overlap = 100
     chunked_documents = []
     for doc in documents:
@@ -181,7 +181,7 @@ def update_knowledge_graph_with_new_file(index, storage_context, file_path, file
 def generate_knowledge_graph(file_path, file_type, person_name, dir_name, storage_dir):
     # File processing and knowledge graph construction
     documents = process_file(file_path, file_type)
-    chunk_size = 2014
+    chunk_size = 1024
     overlap = 100
     chunked_documents = []
     for doc in documents:
@@ -204,7 +204,7 @@ def generate_knowledge_graph(file_path, file_type, person_name, dir_name, storag
     # Build knowledge graph
     index = PropertyGraphIndex.from_documents(
         nodes,
-        max_triplets_per_chunk=10,
+        max_triplets_per_chunk=5,
         storage_context=storage_context,
         show_progress=True,
         include_embeddings=False,
