@@ -264,6 +264,43 @@ zhuyuanzhang = {
     ]
 }
 
+# 物理教材模版
+highschool_physics = {
+    "CUSTOM_KG_TRIPLET_EXTRACT_TMPL": (
+                "从给定的文本中提取多层次的物理学知识三元组，"
+                "包括物理量、公式、定理、物理过程、物理现象、题目、答案等，"
+                "每个三元组以 (head, relation, tail) 及其各自的类型形式出现。\n"
+                "---------------------\n"
+                "初始本体论：\n"
+                "实体类型：{allowed_entity_types}\n"
+                "关系类型：{allowed_relation_types}\n"
+                "指导原则：\n"
+                "- 以 JSON 格式输出：[{{'head': '', 'head_type': '', 'relation': '', 'tail': '', 'tail_type': ''}}]\n"
+                "- 使用最完整的实体形式（例如 '牛顿第二定律' 而不是 '牛顿定律'）\n"
+                "- 对复杂的物理过程进行分解，例如：\n"
+                "  1. '力的作用使物体发生加速度' =>\n"
+                "     [{{'head': '力', 'relation': 'CAUSES', 'tail': '加速度', 'tail_type': 'PHYSICAL_QUANTITY'}}]\n"
+                "  2. '重力作用于物体使其下落' =>\n"
+                "     [{{'head': '重力', 'relation': 'ACTS_ON', 'tail': '物体', 'tail_type': 'OBJECT'}},\n"
+                "      {{'head': '物体', 'relation': 'MOVES_IN', 'tail': '下落', 'tail_type': 'PHYSICAL_PROCESS'}}]\n"
+                "- 提取物理公式及其相关解释，确保公式的准确性和上下文的连贯性。\n"
+                "- 特别关注物理学中的定律、定理及其适用条件。\n"
+                "- 捕捉教材中的例题和解题过程，以便建立物理现象与公式之间的联系。\n"
+                "---------------------\n"
+                "文本：{text}\n"
+                "输出：\n"
+            ),
+    "allowed_entity_types": [
+        "PHYSICAL_QUANTITY", "FORMULA", "LAW", "THEORY", "CONCEPT", "OBJECT", "PROCESS", "EXAMPLE", "QUESTION", "ANSWER"
+    ],
+    "allowed_relation_types": [
+        "CAUSES", "ACTS_ON", "RELATED_TO", "APPLIES_TO", "DERIVED_FROM", "INVOLVES", "EQUALS",
+        "MEASURED_IN", "PART_OF", "RESULTS_IN", "USEFUL_IN", "IMPACTED_BY", "PROVIDES_EXAMPLE",
+        "IS_QUESTION_FOR", "HAS_ANSWER"
+    ]
+}
+
+
 # from llama_index.core.prompts import PromptTemplate
 # from llama_index.core.prompts.prompt_type import PromptType
 
