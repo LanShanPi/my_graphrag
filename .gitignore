@@ -1,3 +1,5 @@
 .__dpc000000003275da66000043ef
 __pycache__/
 log.out
+*.log
+config.py
