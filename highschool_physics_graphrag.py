@@ -13,8 +13,8 @@ from llama_index.core.schema import Document
 import re
 from docx import Document as DocxDocument
 import fitz  # PyMuPDF
-from config import OPENAI_API_KEY3 as OPENAI_API_KEY
-from config import API_BASE1 as API_BASE
+from config import OPENAI_API_KEY1 as OPENAI_API_KEY
+from config import API_BASE3 as API_BASE
 from config import API_BASE2
 from prompt.prompt import highschool_physics as triplet_extraction_template
 from functools import lru_cache
@@ -150,7 +150,7 @@ def generate_knowledge_graph(file_path, file_type, dir_name, storage_dir):
     graph_store = SimpleGraphStore()
     storage_context = StorageContext.from_defaults(graph_store=graph_store)
     
-    embed_model = OpenAIEmbedding(model_name="text-embedding-ada-002")
+    embed_model = OpenAIEmbedding(model_name="text-embedding-babbage-002",api_key=OPENAI_API_KEY, base_url=API_BASE)
     # embed_model=embed_model,  # 指定编码模型
     # include_embeddings=True,
 
