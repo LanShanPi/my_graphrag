@@ -13,9 +13,8 @@ from llama_index.core.schema import Document
 import re
 from docx import Document as DocxDocument
 import fitz  # PyMuPDF
-from config import OPENAI_API_KEY1 as OPENAI_API_KEY
-from config import API_BASE3 as API_BASE
-from config import API_BASE2
+from config import OPENAI_API_KEY2 as OPENAI_API_KEY
+from config import API_BASE1 as API_BASE
 from prompt.prompt import highschool_physics as triplet_extraction_template
 from functools import lru_cache
 import networkx as nx
@@ -33,14 +32,14 @@ import logging
 
 
 # # 设置 OpenAI API
-# os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-# openai.api_key = os.environ["OPENAI_API_KEY"]
-# openai.api_base = API_BASE
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+openai.api_key = os.environ["OPENAI_API_KEY"]
+openai.api_base = API_BASE
 
 # 配置 GPU/CPU 设备
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # llm = LlamaOpenAI(temperature=0, model="gpt-4o", device=device)
-llm = LlamaOpenAI(temperature=0, model="gpt-3.5", api_key=OPENAI_API_KEY, base_url=API_BASE,timeout=600)
+llm = LlamaOpenAI(temperature=0, model="gpt-4o", api_key=OPENAI_API_KEY, base_url=API_BASE,timeout=600)
 
 # 定义统一的存储目录
 def setup_storage_dir(file_name):
@@ -247,9 +246,9 @@ def get_response_v1(index,queries):
 
     query_engine = index.as_query_engine(llm=llm, include_text=True,response_mode="tree_summarize",similarity_top_k=5)
     response = query_engine.query(queries)
-    for idx, source in enumerate(response.source_nodes):
-        # 使用 get_content() 方法获取节点内容
-        print("[Source] " + str(idx) + ": ", source.node.get_content())
+    # for idx, source in enumerate(response.source_nodes):
+    #     # 使用 get_content() 方法获取节点内容
+    #     print("[Source] " + str(idx) + ": ", source.node.get_content())
 
     return response
 
@@ -266,7 +265,7 @@ if __name__ == "__main__":
     )
 
 
-    file_path = "/nfs/hongzhili/my_graphrag/data/高中物理测试题3.pdf"
+    file_path = "/Users/hzl/Project/my_graphrag/data/高中物理测试题3.pdf"
     file_type = "pdf"
     dir_name = "highschool_physics"
     
