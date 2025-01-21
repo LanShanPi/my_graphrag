@@ -2,4 +2,4 @@
 __pycache__/
 log.out
 *.log
-config.py
+/config.py
