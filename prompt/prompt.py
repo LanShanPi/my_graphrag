@@ -282,21 +282,22 @@ highschool_physics = {
                 "     [{{'head': '力', 'relation': 'CAUSES', 'tail': '加速度', 'tail_type': 'PHYSICAL_QUANTITY'}}]\n"
                 "  2. '重力作用于物体使其下落' =>\n"
                 "     [{{'head': '重力', 'relation': 'ACTS_ON', 'tail': '物体', 'tail_type': 'OBJECT'}},\n"
-                "      {{'head': '物体', 'relation': 'MOVES_IN', 'tail': '下落', 'tail_type': 'PHYSICAL_PROCESS'}}]\n"
+                "      {{'head': '物体', 'relation': 'MOVES_IN', 'tail': '下落', 'tail_type': 'PHENOMENON'}}]\n"
                 "- 提取物理公式及其相关解释，确保公式的准确性和上下文的连贯性。\n"
-                "- 特别关注物理学中的定律、定理及其适用条件。\n"
                 "- 捕捉教材中的例题和解题过程，以便建立物理现象与公式之间的联系。\n"
+                "- 提取教材的背景信息（例如章节、作者、主题），为知识图谱提供上下文。\n"
                 "---------------------\n"
                 "文本：{text}\n"
                 "输出：\n"
             ),
     "allowed_entity_types": [
-        "PHYSICAL_QUANTITY", "FORMULA", "LAW", "THEORY", "CONCEPT", "OBJECT", "PROCESS", "EXAMPLE", "QUESTION", "ANSWER"
+        "PHYSICAL_QUANTITY", "FORMULA", "LAW", "THEORY", "CONCEPT", "OBJECT",
+        "PROCESS", "EXAMPLE", "QUESTION", "ANSWER", "EXPERIMENT", "PHENOMENON", "CONDITION"
     ],
     "allowed_relation_types": [
         "CAUSES", "ACTS_ON", "RELATED_TO", "APPLIES_TO", "DERIVED_FROM", "INVOLVES", "EQUALS",
         "MEASURED_IN", "PART_OF", "RESULTS_IN", "USEFUL_IN", "IMPACTED_BY", "PROVIDES_EXAMPLE",
-        "IS_QUESTION_FOR", "HAS_ANSWER"
+        "IS_QUESTION_FOR", "HAS_ANSWER", "EXPLAINS", "DEPENDS_ON", "HAS_UNIT"
     ]
 }
 
