@@ -11,6 +11,9 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI as LlamaOpenAI
 import owlready2
 from owlready2 import get_ontology, sync_reasoner
+from config import OPENAI_API_KEY2 as OPENAI_API_KEY
+from config import API_BASE1 as API_BASE
+from rdflib.plugins.sparql import prepareQuery
 
 # 如果用 Owlready2
 try:
@@ -102,12 +105,12 @@ def advanced_symbolic_reasoning_owlready2(storage_dir, config):
     except Exception as e:
         logging.error("[OWLready2] sync_reasoner() failed:", e)
 
-def generate_knowledge_graph(documents, dir_name, storage_dir, config):
+def generate_knowledge_graph(documents, dir_name, storage_dir, Pipe_config):
     """
     从分块后的 Document 列表构建知识图谱，保存为 LlamaIndex + RDF + PyVis可视化
     """
-    llm = LlamaOpenAI(temperature=0, model="gpt-4o", api_key="", base_url="", timeout=600)
-    embed_model = OpenAIEmbedding(model_name="text-embedding-ada-002", api_key="", base_url="")
+    llm = LlamaOpenAI(temperature=0, model="gpt-4o", api_key=OPENAI_API_KEY, base_url=API_BASE, timeout=600)
+    embed_model = OpenAIEmbedding(model_name="text-embedding-ada-002", api_key=OPENAI_API_KEY, base_url=API_BASE)
 
     entity_types, relation_types, CUSTOM_KG_TRIPLET_EXTRACT_PROMPT = get_config_prompt()
 
@@ -151,7 +154,7 @@ def generate_knowledge_graph(documents, dir_name, storage_dir, config):
     store_in_rdf(index, storage_dir, config)
 
     if config.enable_symbolic_reasoning and config.reasoning_mode == "owl":
-        advanced_symbolic_reasoning_owlready2(storage_dir, config)
+        advanced_symbolic_reasoning_owlready2(storage_dir, Pipe_config)
 
     return index
 
@@ -168,7 +171,7 @@ def symbolic_query_sparql(storage_dir, limit=5):
     """
     演示如何用 SPARQL 查询 knowledge_graph.ttl
     """
-    from rdflib.plugins.sparql import prepareQuery
+    
     rdf_file = os.path.join(storage_dir, "knowledge_graph.ttl")
     if not os.path.exists(rdf_file):
         return []
