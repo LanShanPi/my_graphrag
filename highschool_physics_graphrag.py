@@ -135,8 +135,8 @@ def check_subfolder_exists(parent_folder, subfolder_name):
 def generate_knowledge_graph(file_path, file_type, dir_name, storage_dir):
     # File processing and knowledge graph construction
     documents = process_file(file_path, file_type)
-    chunk_size = 256
-    overlap = 20
+    chunk_size = 128
+    overlap = 10
     chunked_documents = []
     for doc in documents:
         text_chunks = chunk_text_with_overlap(doc.text, chunk_size, overlap)
@@ -150,7 +150,7 @@ def generate_knowledge_graph(file_path, file_type, dir_name, storage_dir):
     graph_store = SimpleGraphStore()
     storage_context = StorageContext.from_defaults(graph_store=graph_store)
     
-    embed_model = OpenAIEmbedding(model_name="text-embedding-babbage-002",api_key=OPENAI_API_KEY, base_url=API_BASE)
+    embed_model = OpenAIEmbedding(model_name="text-embedding-ada-002",api_key=OPENAI_API_KEY, base_url=API_BASE)
     # embed_model=embed_model,  # 指定编码模型
     # include_embeddings=True,
 
@@ -159,7 +159,7 @@ def generate_knowledge_graph(file_path, file_type, dir_name, storage_dir):
         chunked_documents,
         llm=llm,
         embed_model=embed_model,  # 指定编码模型
-        include_embeddings=True,
+        include_embeddings=False,
         max_triplets_per_chunk=10,
         storage_context=storage_context,
         show_progress=True,
