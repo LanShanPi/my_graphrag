@@ -29,11 +29,8 @@ from llama_index.core.extractors.metadata_extractors import BaseExtractor
 from llama_index.core.ingestion import IngestionPipeline
 # from llama_index.core.vector_stores.types import MetadataFilters, ExactMatchFilter
 import logging
-import spacy
 import hanlp
 
-# 加载 HanLP 分句工具
-sent_splitter = hanlp.load('CTB6_CONVSEG')
 
 
 # # 设置 OpenAI API
@@ -159,6 +156,8 @@ def semantic_chunking_with_context(text, chunk_size, overlap):
     :param overlap: 块之间的重叠字符数
     :return: 分块后的列表，每块附带上下文信息
     """
+    # 加载 HanLP 分句工具
+    sent_splitter = hanlp.load('CTB6_CONVSEG')
     # 章节标题正则匹配
     section_pattern = r"(第[一二三四五六七八九十百]+章|[0-9]+\.[0-9]+ 节)"
     matches = re.finditer(section_pattern, text)
