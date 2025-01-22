@@ -8,14 +8,14 @@ from llama_index.core.graph_stores import SimpleGraphStore
 from llama_index.llms.openai import OpenAI as LlamaOpenAI
 from pyvis.network import Network
 import openai
-import torch
+import torch 
 from llama_index.core.schema import Document
 import re
 from docx import Document as DocxDocument
 import fitz  # PyMuPDF
 from config import OPENAI_API_KEY2 as OPENAI_API_KEY
 from config import API_BASE1 as API_BASE
-from prompt.prompt import highschool_physics as triplet_extraction_template
+from prompt.prompt import novel_kg_extraction as triplet_extraction_template
 from functools import lru_cache
 import networkx as nx
 from matplotlib import pyplot as plt
@@ -23,6 +23,7 @@ from openai import OpenAI as local_openai
 from prompt.response_prompt import mingchao_person as prompt_
 import os
 import re
+import time
 # from llama_index.core.extractors import BaseExtractor
 from llama_index.core.extractors.metadata_extractors import BaseExtractor
 from llama_index.core.ingestion import IngestionPipeline
@@ -134,7 +135,7 @@ def check_subfolder_exists(parent_folder, subfolder_name):
 def generate_knowledge_graph(file_path, file_type, dir_name, storage_dir):
     # File processing and knowledge graph construction
     documents = process_file(file_path, file_type)
-    chunk_size = 128
+    chunk_size = 256
     overlap = 10
     chunked_documents = []
     for doc in documents:
@@ -158,7 +159,7 @@ def generate_knowledge_graph(file_path, file_type, dir_name, storage_dir):
         chunked_documents,
         llm=llm,
         embed_model=embed_model,  # 指定编码模型
-        include_embeddings=False,
+        include_embeddings=True,
         max_triplets_per_chunk=10,
         storage_context=storage_context,
         show_progress=True,
@@ -246,9 +247,9 @@ def get_response_v1(index,queries):
 
     query_engine = index.as_query_engine(llm=llm, include_text=True,response_mode="tree_summarize",similarity_top_k=5)
     response = query_engine.query(queries)
-    # for idx, source in enumerate(response.source_nodes):
-    #     # 使用 get_content() 方法获取节点内容
-    #     print("[Source] " + str(idx) + ": ", source.node.get_content())
+    for idx, source in enumerate(response.source_nodes):
+        # 使用 get_content() 方法获取节点内容
+        print("[Source] " + str(idx) + ": ", source.node.get_content())
 
     return response
 
@@ -278,7 +279,12 @@ if __name__ == "__main__":
         index = load_knowledge_graph(storage_dir)
 
     input_ = None
+    pre_prompt = "根据自身能力和检索到的知识尽可能详细的回复下述问题，且回复要满足：回答的准确性、回答的完整性、回答的逻辑性、回答的语言表达清晰性，这四个要求，仅需输出回答就好了，不需要额外的输出。下面是问题："
     while input_ != "over":
         input_ = input("请输入你针对’高中物理测试题3的‘这本书的问题：")
-        response = get_response_v1(index,input_)
+        start = time.time()
+        print("#######################")
+        response = get_response_v1(index,pre_prompt+input_)
+        print("#######################")
+        print("生成时间：",time.time()-start)
         print(response)

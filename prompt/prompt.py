@@ -301,6 +301,47 @@ highschool_physics = {
     ]
 }
 
+novel_kg_extraction = {
+    "CUSTOM_KG_TRIPLET_EXTRACT_TMPL": (
+                "从给定的小说文本中提取多层次的知识三元组，"
+                "包括人物关系、事件描述、地点描述、物品描述、时间描述、情节发展等，"
+                "每个三元组以 (head, relation, tail) 及其各自的类型形式出现。\n"
+                "---------------------\n"
+                "初始本体论：\n"
+                "实体类型：{allowed_entity_types}\n"
+                "关系类型：{allowed_relation_types}\n"
+                "指导原则：\n"
+                "- 以 JSON 格式输出：[{{'head': '', 'head_type': '', 'relation': '', 'tail': '', 'tail_type': ''}}]\n"
+                "- 使用最完整的实体形式（例如 '伊丽莎白·班内特' 而不是 '伊丽莎白'）。\n"
+                "- 对复杂的事件或情节进行分解，例如：\n"
+                "  1. '达西向伊丽莎白求婚并被拒绝' =>\n"
+                "     [{{'head': '达西', 'relation': 'PROPOSED_TO', 'tail': '伊丽莎白·班内特', 'tail_type': 'CHARACTER'}},\n"
+                "      {{'head': '伊丽莎白·班内特', 'relation': 'REJECTED', 'tail': '达西', 'tail_type': 'CHARACTER'}}]\n"
+                "  2. '一场暴风雨袭击了村庄' =>\n"
+                "     [{{'head': '暴风雨', 'relation': 'IMPACTED', 'tail': '村庄', 'tail_type': 'LOCATION'}}]\n"
+                "  3. '战争在1800年爆发' =>\n"
+                "     [{{'head': '战争', 'relation': 'HAPPENED_IN', 'tail': '1800年', 'tail_type': 'TIME'}}]\n"
+                "- 提取人物之间的关系，包括家庭关系、友谊、敌对关系等。\n"
+                "- 提取小说中的重要地点及其相关事件。\n"
+                "- 提取重要物品及其在情节中的作用，例如宝物、信件等。\n"
+                "- 提取章节或段落中的背景信息（例如章节名、作者、主题），为知识图谱提供上下文。\n"
+                "- 避免冗余三元组，确保输出清晰、简洁。\n"
+                "---------------------\n"
+                "文本：{text}\n"
+                "输出：\n"
+            ),
+    "allowed_entity_types": [
+        "CHARACTER", "EVENT", "LOCATION", "OBJECT", "EMOTION", "RELATIONSHIP", "CHAPTER", "CONCEPT", "TIME", "ORGANIZATION", "SYMBOL", "MOTIF", "ACTION"
+    ],
+    "allowed_relation_types": [
+        "PROPOSED_TO", "REJECTED", "FRIENDS_WITH", "ENEMY_OF", "LOCATED_IN", "HAPPENED_IN", 
+        "POSSESSES", "DELIVERED_TO", "INVOLVES", "DEPENDS_ON", "CAUSED", "IMPACTED", 
+        "MENTIONED_IN", "PART_OF", "HAS_EMOTION", "EXPLAINS", "OCCURRED_AT", "REPRESENTS", 
+        "ASSOCIATED_WITH", "BELONGS_TO", "INFLUENCES", "INSPIRED_BY"
+    ]
+}
+
+
 
 # from llama_index.core.prompts import PromptTemplate
 # from llama_index.core.prompts.prompt_type import PromptType
