@@ -264,40 +264,62 @@ zhuyuanzhang = {
     ]
 }
 
-# 物理教材模版
-highschool_physics = {
+# 理科教材模版
+science_general_template = {
     "CUSTOM_KG_TRIPLET_EXTRACT_TMPL": (
-                "从给定的文本中提取多层次的物理学知识三元组，"
-                "包括物理量、公式、定理、物理过程、物理现象、题目、答案等，"
-                "每个三元组以 (head, relation, tail) 及其各自的类型形式出现。\n"
-                "---------------------\n"
-                "初始本体论：\n"
-                "实体类型：{allowed_entity_types}\n"
-                "关系类型：{allowed_relation_types}\n"
-                "指导原则：\n"
-                "- 以 JSON 格式输出：[{{'head': '', 'head_type': '', 'relation': '', 'tail': '', 'tail_type': ''}}]\n"
-                "- 使用最完整的实体形式（例如 '牛顿第二定律' 而不是 '牛顿定律'）\n"
-                "- 对复杂的物理过程进行分解，例如：\n"
-                "  1. '力的作用使物体发生加速度' =>\n"
-                "     [{{'head': '力', 'relation': 'CAUSES', 'tail': '加速度', 'tail_type': 'PHYSICAL_QUANTITY'}}]\n"
-                "  2. '重力作用于物体使其下落' =>\n"
-                "     [{{'head': '重力', 'relation': 'ACTS_ON', 'tail': '物体', 'tail_type': 'OBJECT'}},\n"
-                "      {{'head': '物体', 'relation': 'MOVES_IN', 'tail': '下落', 'tail_type': 'PHENOMENON'}}]\n"
-                "- 提取物理公式及其相关解释，确保公式的准确性和上下文的连贯性。\n"
-                "- 捕捉教材中的例题和解题过程，以便建立物理现象与公式之间的联系。\n"
-                "- 提取教材的背景信息（例如章节、作者、主题），为知识图谱提供上下文。\n"
-                "---------------------\n"
-                "文本：{text}\n"
-                "输出：\n"
-            ),
+        "从给定的文本中提取多层次的科学知识三元组，"
+        "包括但不限于物理量、数学公式、化学方程式、生物学现象、定理、推论、定律、结论、题目、答案等，"
+        "每个三元组以 (head, relation, tail) 及其各自的类型形式出现。\n"
+        "---------------------\n"
+        "初始本体论：\n"
+        "实体类型：{allowed_entity_types}\n"
+        "关系类型：{allowed_relation_types}\n"
+        "指导原则：\n"
+        "- 以 JSON 格式输出：[{{'head': '', 'head_type': '', 'relation': '', 'tail': '', 'tail_type': ''}}]\n"
+        "- 使用最完整且学科准确的实体形式（例如 '牛顿第二定律' 而不是 '牛顿定律'；'勾股定理' 而不是 '定理'）。\n"
+        "- 对复杂的科学过程进行分解，例如：\n"
+        "  1. '力的作用使物体发生加速度' =>\n"
+        "     [{{'head': '力', 'relation': 'CAUSES', 'tail': '加速度', 'tail_type': 'PHYSICAL_QUANTITY'}}]\n"
+        "  2. '氧气和氢气在点燃下反应生成水' =>\n"
+        "     [{{'head': '氧气', 'relation': 'REACTS_WITH', 'tail': '氢气', 'tail_type': 'SUBSTANCE'}},\n"
+        "      {{'head': '反应', 'relation': 'PRODUCES', 'tail': '水', 'tail_type': 'SUBSTANCE'}}]\n"
+        "- 提取数学公式和物理公式及其相关解释，确保公式的准确性和上下文的连贯性。\n"
+        "- 捕捉教材中的例题和解题过程，以便建立现象与公式之间的联系。\n"
+        "- 提取实验步骤和条件，捕捉科学实验的因果关系及结果。\n"
+        "- 提取教材的背景信息（例如章节、作者、主题），为知识图谱提供上下文。\n"
+        "- 对于包含多个学科的综合内容，提取时注明学科属性。\n"
+        "---------------------\n"
+        "文本：{text}\n"
+        "输出：\n"
+    ),
     "allowed_entity_types": [
-        "PHYSICAL_QUANTITY", "FORMULA", "LAW", "THEORY", "CONCEPT", "OBJECT",
-        "PROCESS", "EXAMPLE", "QUESTION", "ANSWER", "EXPERIMENT", "PHENOMENON", "CONDITION"
+        # 通用实体类型
+        "CONCEPT", "OBJECT", "PROCESS", "CONDITION", "PHENOMENON", "EXAMPLE", "QUESTION", "ANSWER", 
+        "EXPERIMENT", "CONTEXT", "CHAPTER", "SUBJECT", "SECTION",
+        # 物理实体类型
+        "PHYSICAL_QUANTITY", "FORMULA", "LAW", "THEORY",
+        # 数学实体类型
+        "EQUATION", "DEFINITION", "AXIOM", "PROOF", "CONJECTURE",
+        # 化学实体类型
+        "SUBSTANCE", "REACTION", "MOLECULE", "CHEMICAL_EQUATION",
+        # 生物实体类型
+        "SPECIES", "CELL", "ORGAN", "SYSTEM", "FUNCTION",
     ],
     "allowed_relation_types": [
-        "CAUSES", "ACTS_ON", "RELATED_TO", "APPLIES_TO", "DERIVED_FROM", "INVOLVES", "EQUALS",
-        "MEASURED_IN", "PART_OF", "RESULTS_IN", "USEFUL_IN", "IMPACTED_BY", "PROVIDES_EXAMPLE",
-        "IS_QUESTION_FOR", "HAS_ANSWER", "EXPLAINS", "DEPENDS_ON", "HAS_UNIT"
+        # 通用关系类型
+        "CAUSES", "ACTS_ON", "RELATED_TO", "APPLIES_TO", "DERIVED_FROM", "INVOLVES", "PART_OF", 
+        "RESULTS_IN", "DEPENDS_ON", "PROVIDES_EXAMPLE", "EXPLAINS", "IS_QUESTION_FOR", "HAS_ANSWER",
+        # 物理关系类型
+        "HAS_FORCE", "HAS_ENERGY", "HAS_ACCELERATION", "EQUALS", "MEASURED_IN", "HAS_UNIT", 
+        "CONSERVES", "TRANSFERS", "HAS_COMPONENT", "MOVES_IN", "IMPACTS", "GENERATES",
+        # 化学关系类型
+        "REACTS_WITH", "PRODUCES", "HAS_PROPERTY", "IS_CATALYZED_BY", "PARTICIPATES_IN", "IS_PART_OF_REACTION", 
+        "FORMS", "DECOMPOSES", "INTERACTS_WITH", "NEEDS_CONDITION",
+        # 生物关系类型
+        "HAS_FUNCTION", "IS_COMPONENT_OF", "REGULATES", "TRIGGERED_BY", "SYNTHESIZES", "IS_A", 
+        "CONTAINS", "SUPPORTS", "DEPENDS_ON", "INTERACTS_WITH",
+        # 数学关系类型
+        "PROVES", "DISPROVES", "LEADS_TO", "IS_BASED_ON",
     ]
 }
 
