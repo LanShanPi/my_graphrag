@@ -29,6 +29,7 @@ from llama_index.core.extractors.metadata_extractors import BaseExtractor
 from llama_index.core.ingestion import IngestionPipeline
 # from llama_index.core.vector_stores.types import MetadataFilters, ExactMatchFilter
 import logging
+import spacy
 
 
 
@@ -84,6 +85,26 @@ def chunk_text_with_overlap(text, chunk_size, overlap):
         start += chunk_size - overlap
     return chunks
 
+
+# 进行语意分块
+def semantic_chunking(text, chunk_size, overlap):
+    nlp = spacy.load("en_core_web_sm")
+    doc = nlp(text)
+    chunks = []
+    chunk = []
+    current_length = 0
+
+    for sent in doc.sents:
+        if current_length + len(sent.text) > chunk_size:
+            chunks.append(" ".join(chunk))
+            chunk = chunk[-(overlap // len(sent.text)):] if len(chunk) > 0 else []
+            current_length = len(" ".join(chunk))
+        chunk.append(sent.text)
+        current_length += len(sent.text)
+    if chunk:
+        chunks.append(" ".join(chunk))
+    return chunks
+
 def read_pdf_with_pymupdf(file_path):
     documents = []
     pdf = fitz.open(file_path)
@@ -135,11 +156,11 @@ def check_subfolder_exists(parent_folder, subfolder_name):
 def generate_knowledge_graph(file_path, file_type, dir_name, storage_dir):
     # File processing and knowledge graph construction
     documents = process_file(file_path, file_type)
-    chunk_size = 256
-    overlap = 10
+    chunk_size = 1024
+    overlap = 256
     chunked_documents = []
     for doc in documents:
-        text_chunks = chunk_text_with_overlap(doc.text, chunk_size, overlap)
+        text_chunks = semantic_chunking(doc.text, chunk_size, overlap)
         for chunk in text_chunks:
             chunked_documents.append(Document(text=chunk, extra_info=doc.extra_info))
 
@@ -245,7 +266,7 @@ def get_response_v1(index,queries):
     #                     ]
     #                     )
 
-    query_engine = index.as_query_engine(llm=llm, include_text=True,response_mode="tree_summarize",similarity_top_k=5)
+    query_engine = index.as_query_engine(llm=llm, include_text=True,response_mode="tree_summarize",similarity_top_k=10,vector_store_query_mode="HYBRID")
     response = query_engine.query(queries)
     for idx, source in enumerate(response.source_nodes):
         # 使用 get_content() 方法获取节点内容
@@ -266,9 +287,9 @@ if __name__ == "__main__":
     )
 
 
-    file_path = "/Users/hzl/Project/my_graphrag/data/高中物理测试题3.pdf"
+    file_path = "/nfs/hongzhili/my_graphrag/data/高中物理测试题3.pdf"
     file_type = "pdf"
-    dir_name = "highschool_physics"
+    dir_name = "physics"
     
     # 生成存储路径
     storage_dir = setup_storage_dir(dir_name)
