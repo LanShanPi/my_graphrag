@@ -40,11 +40,6 @@ import torch
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误，忽略警告
 
-# 配置 GPU/CPU 设备
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# llm = LlamaOpenAI(temperature=0, model="gpt-4o", device=device)
-llm = LlamaOpenAI(temperature=0, model="gpt-4o", api_key=OPENAI_API_KEY, api_base=API_BASE,timeout=600)
-
 # 定义统一的存储目录
 def setup_storage_dir(file_name):
     """
@@ -420,7 +415,7 @@ def load_knowledge_graph(storage_dir):
     return index
 
 
-def get_response_v1(index,queries):
+def get_response(index,queries):
     ### 普通回复
     # 查询索引
     # include_text 用途：决定在查询结果中是否包含原始文本。
@@ -469,6 +464,10 @@ def get_response_v1(index,queries):
 
 
 if __name__ == "__main__":
+    # 配置 GPU/CPU 设备
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    llm = LlamaOpenAI(temperature=0, model="gpt-4o", api_key=OPENAI_API_KEY, api_base=API_BASE,timeout=600)
+
     # 配置日志
     logging.basicConfig(
         level=logging.INFO,
@@ -493,13 +492,14 @@ if __name__ == "__main__":
         index = load_knowledge_graph(storage_dir)
 
     input_ = None
-    pre_prompt = "根据自身能力和检索到的知识尽可能详细的回复下述问题，且回复要满足：回答的准确性、回答的完整性、回答的逻辑性、回答的语言表达清晰性，这四个要求，仅需输出回答就好了，不需要额外的输出。下面是问题："
+    # 不要生成 LaTeX 语法。这个提示很重要
+    pre_prompt = "根据自身能力和检索到的知识尽可能详细的回复下述问题，且回复要满足：回答的准确性、回答的完整性、回答的逻辑性、回答的语言表达清晰性，这四个要求，仅需输出回答就好了，不需要额外的输出。不要生成 LaTeX 语法。下面是问题："
     while input_ != "over":
         input_ = input("请输入你针对’高中物理测试题3的‘这本书的问题：")
         start = time.time()
         print("#######################")
         print("问题：",input_)
-        response = get_response_v1(index,pre_prompt+input_)
+        response = get_response(index,pre_prompt+input_)
         print("#######################")
         print("生成时间：",time.time()-start)
         print(response)
