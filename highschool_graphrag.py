@@ -1,7 +1,17 @@
+import os
+from config import OPENAI_API_KEY1 as OPENAI_API_KEY
+from config import API_BASE3 as API_BASE
+import openai
+
+
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+openai.api_key = os.environ["OPENAI_API_KEY"]
+openai.api_base = API_BASE
+
+
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.prompts.prompt_type import PromptType
 from llama_index.embeddings.openai import OpenAIEmbedding
-import os
 from llama_index.core import SimpleDirectoryReader, StorageContext, load_index_from_storage
 from llama_index.core import PropertyGraphIndex
 from llama_index.core.graph_stores import SimpleGraphStore
@@ -12,15 +22,11 @@ from llama_index.core.schema import Document
 import re
 from docx import Document as DocxDocument
 import fitz  # PyMuPDF
-from config import OPENAI_API_KEY2 as OPENAI_API_KEY
-from config import API_BASE1 as API_BASE
 from prompt.prompt import science_general_template as triplet_extraction_template
 from functools import lru_cache
 import networkx as nx
 from openai import OpenAI as local_openai
 from prompt.response_prompt import mingchao_person as prompt_
-import os
-import re
 import time
 import logging
 import hanlp
@@ -28,20 +34,16 @@ import fitz  # PyMuPDF
 from paddleocr import PaddleOCR
 from PIL import Image
 import io
+from sympy import sympify
+from sympy.parsing.sympy_parser import parse_expr
+import torch
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误，忽略警告
 
-
-
-# # 设置 OpenAI API
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-openai.api_key = os.environ["OPENAI_API_KEY"]
-openai.api_base = API_BASE
-
 # 配置 GPU/CPU 设备
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # llm = LlamaOpenAI(temperature=0, model="gpt-4o", device=device)
-llm = LlamaOpenAI(temperature=0, model="gpt-4o", api_key=OPENAI_API_KEY, base_url=API_BASE,timeout=600)
+llm = LlamaOpenAI(temperature=0, model="gpt-4o", api_key=OPENAI_API_KEY, api_base=API_BASE,timeout=600)
 
 # 定义统一的存储目录
 def setup_storage_dir(file_name):
@@ -119,17 +121,49 @@ def preprocess_text(text):
 #     return chunks
 
 
-def protect_formulas(text):
-    """
-    使用正则表达式识别并保护公式
-    """
-    formula_pattern = r"[A-Za-z0-9+\-*/^=(){}[\].]+"
-    formulas = re.findall(formula_pattern, text)
-    formula_map = {f"{{FORMULA_{i}}}": formula for i, formula in enumerate(formulas)}
+# def protect_formulas(text):
+#     """
+#     使用正则表达式识别并保护公式
+#     """
+#     formula_pattern = r"[A-Za-z0-9+\-*/^=(){}[\].]+"
+#     formulas = re.findall(formula_pattern, text)
+#     formula_map = {f"{{FORMULA_{i}}}": formula for i, formula in enumerate(formulas)}
 
-    # 替换公式为占位符
-    for placeholder, formula in formula_map.items():
-        text = text.replace(formula, placeholder)
+#     # 替换公式为占位符
+#     for placeholder, formula in formula_map.items():
+#         text = text.replace(formula, placeholder)
+#     return text, formula_map
+
+def protect_formulas_advanced(text):
+    """
+    高级公式保护：结合改进正则表达式和 SymPy 解析
+    """
+    formula_pattern = r"""
+    (?:                                     # 非捕获组，匹配以下之一
+        [a-zA-Z0-9_+\-*/^=<>≤≥(),\[\]{}|]+  # 基本符号、字母、数字
+        | [√∫∞ΣΠΔ∂⋅→←↔↕∝∑∏θλμνξορστυφχψω]  # 常见希腊字母及数学符号
+        | \d+\.\d+(e[+\-]?\d+)?             # 科学计数法（如 1.23e-4）
+        | \d+\.\d+                          # 带小数点的数字（如 3.14）
+        | [A-Z][a-z]?\d*(?:[+\-]?)          # 化学元素（如 H2O、CO2）
+        | [+\-]?\d+\s*[a-zA-Z]{1,3}         # 单位（如 5 m、10 kg）
+        | [a-zA-Z]+\([a-zA-Z0-9, ]+\)       # 数学函数（如 sin(x) 或 log(x, y)）
+        | [a-zA-Z0-9]+(?:_\d+|^\d+)?        # 下标或上标（如 x_1, x^2）
+        | ->|<-|⇌|=                         # 化学反应符号
+        | [ATCG]+                           # DNA 序列
+    )
+    """
+    formulas = re.findall(formula_pattern, text)
+    formula_map = {}
+
+    for i, formula in enumerate(formulas):
+        try:
+            # 使用 SymPy 解析公式
+            parsed_formula = sympify(formula)
+            placeholder = f"{{FORMULA_{i}}}"
+            formula_map[placeholder] = str(parsed_formula)
+            text = text.replace(formula, placeholder)
+        except Exception:
+            pass  # 如果解析失败，跳过
     return text, formula_map
 
 def restore_formulas(chunks, formula_map):
@@ -150,7 +184,7 @@ def semantic_chunking_with_context(text, chunk_size, overlap):
     sent_splitter = hanlp.load('CTB6_CONVSEG')
 
     # 章节标题正则匹配
-    section_pattern = r"(第[一二三四五六七八九十百]+章|[0-9]+\.[0-9]+ 节)"
+    section_pattern = r"(第[一二三四五六七八九十百]+[章节]|[0-9]+\.[0-9]+.*?节)"
     matches = re.finditer(section_pattern, text)
 
     sections = []
@@ -168,7 +202,7 @@ def semantic_chunking_with_context(text, chunk_size, overlap):
     chunks = []
     for section, section_text in sections:
         # 保护公式
-        protected_text, formula_map = protect_formulas(section_text)
+        protected_text, formula_map = protect_formulas_advanced(section_text)
         # 分句
         sentences = sent_splitter(protected_text)
         # 分块
@@ -234,11 +268,9 @@ def read_pdf_with_pymupdf(file_path):
         # 如果文本为空，尝试从页面图片中提取文字
         if not text.strip():
             text = extract_text_with_paddleocr(page)
-
         # 如果仍然没有文字，标记为无法识别
         if not text.strip():
             text = f"无法提取文字，来源：第 {i + 1} 页"
-
         # 创建 Document 对象
         documents.append(Document(text=text, extra_info={"source": f"Page {i + 1}"}))
 
@@ -332,7 +364,7 @@ def generate_knowledge_graph(file_path, file_type, dir_name, storage_dir):
     graph_store = SimpleGraphStore()
     storage_context = StorageContext.from_defaults(graph_store=graph_store)
     # text-embedding-ada-002:通用性强，适合自然语言与公式混合的文本;SciBERT:针对科学文本优化，能理解公式上下文
-    embed_model = OpenAIEmbedding(model_name="text-embedding-ada-002",api_key=OPENAI_API_KEY, base_url=API_BASE)
+    embed_model = OpenAIEmbedding(model_name="text-embedding-ada-002",api_key=OPENAI_API_KEY, api_base=API_BASE)
     # embed_model=embed_model,  # 指定编码模型
     # include_embeddings=True,
 
@@ -427,7 +459,7 @@ def get_response_v1(index,queries):
     #                     ]
     #                     )
 
-    query_engine = index.as_query_engine(llm=llm, include_text=True,response_mode="tree_summarize",similarity_top_k=10,vector_store_query_mode="HYBRID")
+    query_engine = index.as_query_engine(llm=llm, include_text=True,response_mode="tree_summarize",similarity_top_k=20,vector_store_query_mode="SEMANTIC_HYBRID")
     response = query_engine.query(queries)
     for idx, source in enumerate(response.source_nodes):
         # 使用 get_content() 方法获取节点内容
@@ -448,7 +480,7 @@ if __name__ == "__main__":
     )
 
 
-    file_path = "/Users/hzl/Project/my_graphrag/data/高中物理测试题3.pdf"
+    file_path = "/data/hongzhili/my_graphrag/data/高中物理测试题3.pdf"
     file_type = "pdf"
     dir_name = "physics"
     
@@ -466,6 +498,7 @@ if __name__ == "__main__":
         input_ = input("请输入你针对’高中物理测试题3的‘这本书的问题：")
         start = time.time()
         print("#######################")
+        print("问题：",input_)
         response = get_response_v1(index,pre_prompt+input_)
         print("#######################")
         print("生成时间：",time.time()-start)

@@ -392,7 +392,7 @@ if __name__ == "__main__":
     )
 
 
-    file_path = "/nfs/hongzhili/my_graphrag/data/高中物理测试题3.pdf"
+    file_path = "/data/hongzhili/my_graphrag/data/高中物理测试题3.pdf"
     file_type = "pdf"
     dir_name = "physics"
     

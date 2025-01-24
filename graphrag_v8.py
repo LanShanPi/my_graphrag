@@ -1,21 +1,29 @@
+import os
+from config import OPENAI_API_KEY1 as OPENAI_API_KEY
+from config import API_BASE3 as API_BASE
+import openai
+
+
+
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+openai.api_key = os.environ["OPENAI_API_KEY"]
+openai.api_base = API_BASE
+
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.prompts.prompt_type import PromptType
-import os
+
 from llama_index.core import SimpleDirectoryReader, StorageContext, load_index_from_storage
 from llama_index.core import PropertyGraphIndex
 from llama_index.core.graph_stores import SimpleGraphStore
 from llama_index.llms.openai import OpenAI
 from pyvis.network import Network
-from llama_index.llms.openai import OpenAI
-import openai
+
 import torch
 from llama_index.core.schema import Document
 import re
 from docx import Document as DocxDocument
 import fitz  # PyMuPDF
-from config import OPENAI_API_KEY1 as OPENAI_API_KEY
-from config import API_BASE1 as API_BASE
-from config import API_BASE2
+
 from prompt.prompt import mingchaonaxieshi_v4 as triplet_extraction_template
 from functools import lru_cache
 import networkx as nx
@@ -30,13 +38,11 @@ from llama_index.core.ingestion import IngestionPipeline
 # from llama_index.core.vector_stores.types import MetadataFilters, ExactMatchFilter
 
 # 设置 OpenAI API
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-openai.api_key = os.environ["OPENAI_API_KEY"]
-openai.api_base = API_BASE
+
 
 # 配置 GPU/CPU 设备
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-llm = OpenAI(temperature=0, model="gpt-4o", device=device)
+llm = OpenAI(temperature=0, model="gpt-4o",api_key=OPENAI_API_KEY, api_base=API_BASE)
 
 # 定义统一的存储目录
 def setup_storage_dir(person_name):
@@ -177,8 +183,11 @@ def generate_knowledge_graph(file_path, file_type, person_name, dir_name, storag
     nodes = pipeline.run(documents=chunked_documents)
 
     # Build knowledge graph
+    
+    
     index = PropertyGraphIndex.from_documents(
         nodes,
+        llm=llm,
         max_triplets_per_chunk=10,
         storage_context=storage_context,
         show_progress=True,
@@ -340,7 +349,7 @@ def get_response_v2(index, noun):
     return response
 
 if __name__ == "__main__":
-    file_path = "/home/xingzai/hzl/my_graphrag/data/明朝的那些事儿.pdf"
+    file_path = "/data/hongzhili/my_graphrag/data/明朝的那些事儿.pdf"
     file_type = "pdf"
     person_name = "朱元璋"
     dir_name = "mingchao"
