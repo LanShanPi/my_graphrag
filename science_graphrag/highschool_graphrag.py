@@ -1,3 +1,6 @@
+import sys
+sys.path.append(r"/data/hongzhili/my_graphrag/")
+
 import os
 from config import OPENAI_API_KEY1 as OPENAI_API_KEY
 from config import API_BASE3 as API_BASE
@@ -8,7 +11,8 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 openai.api_key = os.environ["OPENAI_API_KEY"]
 openai.api_base = API_BASE
 
-
+from llama_index.core.schema import QueryBundle
+from llama_index.core.postprocessor.llm_rerank import LLMRerank
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.prompts.prompt_type import PromptType
 from llama_index.embeddings.openai import OpenAIEmbedding
@@ -458,9 +462,46 @@ def get_response_v1(index,queries):
     response = query_engine.query(queries)
     for idx, source in enumerate(response.source_nodes):
         # 使用 get_content() 方法获取节点内容
-        print("[Source] " + str(idx) + ": ", source.node.get_content())
+        # print("[Source] " + str(idx) + ": ", source.node.get_content())
+        print(f"[Original Source {idx}] 内容: {source.node.get_content()}")
 
     return response
+
+def get_response_v2(index, queries):
+    """
+    保留原有知识图谱查询方式的基础上，增加对候选节点的 rerank 处理，
+    并利用最终整理后的上下文生成回答。
+    """
+    # 1. 调用原有查询引擎，注意参数可根据实际情况调整
+    query_engine = index.as_query_engine(
+        llm=llm,
+        include_text=True,
+        response_mode="tree_summarize",
+        similarity_top_k=20,
+        vector_store_query_mode="SEMANTIC_HYBRID"
+    )
+    response = query_engine.query(queries)
+
+    # 输出原始查询结果中的每个候选节点（可选）
+    for idx, source in enumerate(response.source_nodes):
+        print(f"[Original Source {idx}] 内容: {source.node.get_content()}")
+
+    # 2. 使用 LLMRerank 对原始候选节点进行重新排序
+    query_bundle = QueryBundle(queries)
+    reranker = LLMRerank(model="gpt-4",top_n=5)  # top_n 控制最终返回的候选节点数量
+    reranked_nodes = reranker.postprocess_nodes(response.source_nodes, query_bundle)
+
+    # 输出重新排序后的节点信息（可选）
+    for idx, node in enumerate(reranked_nodes):
+        print(f"[Reranked Source {idx}] 得分: {node.score}，内容: {node.node.get_content()}")
+
+    # 3. 拼接重新排序后的节点文本作为上下文，构造最终提示
+    context_text = "\n\n".join([node.node.get_content() for node in reranked_nodes])
+    final_prompt = f"{queries}\n\n上下文信息：\n{context_text}\n\n回答："
+    # 调用 LLM 生成最终回答
+    final_response = llm(final_prompt)
+
+    return final_response
 
 
 if __name__ == "__main__":

@@ -1,0 +1,4 @@
+# 加载文件生成图谱
+curl -X POST "http://117.147.213.226:8001/upload" -F "file=@/data/hongzhili/my_graphrag/data/活着.txt" -F "file_type=txt" -F "dir_name=huozhe"
+# 生成回复
+curl -X POST "http://117.147.213.226:8001/query" -d "question=电阻的定义式是什么" -d "graph_name=physics"

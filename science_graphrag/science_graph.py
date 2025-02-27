@@ -1,3 +1,6 @@
+import sys
+sys.path.append(r"/data/hongzhili/my_graphrag/")
+
 import os
 from config import OPENAI_API_KEY1 as OPENAI_API_KEY
 from config import API_BASE3 as API_BASE
@@ -7,6 +10,7 @@ import openai
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 openai.api_key = os.environ["OPENAI_API_KEY"]
 openai.api_base = API_BASE
+
 
 
 from llama_index.core.prompts import PromptTemplate
@@ -25,9 +29,6 @@ import fitz  # PyMuPDF
 from prompt.prompt import science_general_template as triplet_extraction_template
 from functools import lru_cache
 import networkx as nx
-from openai import OpenAI as local_openai
-from prompt.response_prompt import mingchao_person as prompt_
-import time
 import logging
 import hanlp
 import fitz  # PyMuPDF
@@ -35,8 +36,21 @@ from paddleocr import PaddleOCR
 from PIL import Image
 import io
 from sympy import sympify
-from sympy.parsing.sympy_parser import parse_expr
 import torch
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("knowledge_graph.log"),
+        logging.StreamHandler()
+    ]
+)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+llm = LlamaOpenAI(temperature=0, model="gpt-4o", api_key=OPENAI_API_KEY, api_base=API_BASE,timeout=600)
+
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误，忽略警告
 
@@ -104,30 +118,6 @@ def read_docx(file_path):
 def preprocess_text(text):
     # 将字符串 text 中的所有连续空白字符替换为单个空格。
     return re.sub(r'\s+', ' ', text).strip()
-
-# def chunk_text_with_overlap(text, chunk_size, overlap):
-#     # 将字符串切割成指定大小的块
-#     chunks = []
-#     start = 0
-#     while start < len(text):
-#         end = start + chunk_size
-#         chunks.append(text[start:end])
-#         start += chunk_size - overlap
-#     return chunks
-
-
-# def protect_formulas(text):
-#     """
-#     使用正则表达式识别并保护公式
-#     """
-#     formula_pattern = r"[A-Za-z0-9+\-*/^=(){}[\].]+"
-#     formulas = re.findall(formula_pattern, text)
-#     formula_map = {f"{{FORMULA_{i}}}": formula for i, formula in enumerate(formulas)}
-
-#     # 替换公式为占位符
-#     for placeholder, formula in formula_map.items():
-#         text = text.replace(formula, placeholder)
-#     return text, formula_map
 
 def protect_formulas_advanced(text):
     """
@@ -233,18 +223,6 @@ def semantic_chunking_with_context(text, chunk_size, overlap):
 
     return restored_chunks
 
-
-# def read_pdf_with_pymupdf(file_path):
-#     documents = []
-#     pdf = fitz.open(file_path)
-#     for i, page in enumerate(pdf):
-#         text = page.get_text("text")
-#         if text:
-#             processed_text = preprocess_text(text)
-#             documents.append(Document(text=processed_text, extra_info={"source": f"Page {i + 1}"}))
-#     pdf.close()
-#     return documents
-
 def read_pdf_with_pymupdf(file_path):
     """
     优化后的 PDF 处理模块：
@@ -321,27 +299,12 @@ def get_config():
     allowed_relation_types = triplet_extraction_template["allowed_relation_types"]
     return allowed_entity_types, allowed_relation_types, CUSTOM_KG_TRIPLET_EXTRACT_PROMPT
 
-def check_subfolder_exists(parent_folder, subfolder_name):
-    """
-    检查指定文件夹中是否存在某个子文件夹
-    :param parent_folder: 父文件夹路径
-    :param subfolder_name: 子文件夹名称
-    :return: True 如果存在，False 如果不存在
-    """
-    subfolder_path = os.path.join(parent_folder, subfolder_name)
-    return os.path.exists(subfolder_path) and os.path.isdir(subfolder_path)
-
 def generate_knowledge_graph(file_path, file_type, dir_name, storage_dir):
     # File processing and knowledge graph construction
     documents = process_file(file_path, file_type)
     chunk_size = 1024
     overlap = 256
     chunked_documents = []
-    # for doc in documents:
-    #     text_chunks = semantic_chunking_with_context(doc.text, chunk_size, overlap)
-    #     for chunk in text_chunks:
-    #         chunked_documents.append(Document(text=chunk, extra_info=doc.extra_info))
-
 
     for doc in documents:
         text_chunks = semantic_chunking_with_context(doc.text, chunk_size, overlap)
@@ -408,11 +371,22 @@ def generate_knowledge_graph(file_path, file_type, dir_name, storage_dir):
     return index
 
 def load_knowledge_graph(storage_dir):
-    # 加载已存储的索引
-    print("已存在相关知识库")
-    storage_context = StorageContext.from_defaults(persist_dir=storage_dir+"/"+"index")
-    index = load_index_from_storage(storage_context)
-    return index
+    try:
+        index_path = os.path.join(storage_dir, "index")
+        if not os.path.exists(index_path):
+            logging.error(f"Index directory not found: {index_path}")
+            raise FileNotFoundError(f"Index directory not found: {index_path}")
+        if not os.listdir(index_path):
+            logging.error(f"Index directory is empty: {index_path}")
+            raise ValueError(f"Index directory is empty: {index_path}")
+
+        storage_context = StorageContext.from_defaults(persist_dir=index_path)
+        index = load_index_from_storage(storage_context)
+        logging.info(f"Successfully loaded knowledge graph from {index_path}")
+        return index
+    except Exception as e:
+        logging.error(f"Failed to load knowledge graph: {e}")
+        raise
 
 
 def get_response(index,queries):
@@ -456,50 +430,10 @@ def get_response(index,queries):
 
     query_engine = index.as_query_engine(llm=llm, include_text=True,response_mode="tree_summarize",similarity_top_k=20,vector_store_query_mode="SEMANTIC_HYBRID")
     response = query_engine.query(queries)
-    for idx, source in enumerate(response.source_nodes):
-        # 使用 get_content() 方法获取节点内容
-        print("[Source] " + str(idx) + ": ", source.node.get_content())
+    # 输出元数据
+    # for idx, source in enumerate(response.source_nodes):
+    #     # 使用 get_content() 方法获取节点内容
+    #     print("[Source] " + str(idx) + ": ", source.node.get_content())
 
     return response
 
-
-if __name__ == "__main__":
-    # 配置 GPU/CPU 设备
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    llm = LlamaOpenAI(temperature=0, model="gpt-4o", api_key=OPENAI_API_KEY, api_base=API_BASE,timeout=600)
-
-    # 配置日志
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler("knowledge_graph.log"),
-            logging.StreamHandler()
-        ]
-    )
-
-
-    file_path = "/data/hongzhili/my_graphrag/data/高中物理测试题3.pdf"
-    file_type = "pdf"
-    dir_name = "physics"
-    
-    # 生成存储路径
-    storage_dir = setup_storage_dir(dir_name)
-    # 若未生成相关图谱，则进行生成，若之前已生成则直接加载
-    if not check_subfolder_exists(storage_dir, "index"):
-        index = generate_knowledge_graph(file_path,file_type,dir_name,storage_dir)
-    else:
-        index = load_knowledge_graph(storage_dir)
-
-    input_ = None
-    # 不要生成 LaTeX 语法。这个提示很重要
-    pre_prompt = "根据自身能力和检索到的知识尽可能详细的回复下述问题，且回复要满足：回答的准确性、回答的完整性、回答的逻辑性、回答的语言表达清晰性，这四个要求，仅需输出回答就好了，不需要额外的输出。不要生成 LaTeX 语法。下面是问题："
-    while input_ != "over":
-        input_ = input("请输入你针对’高中物理测试题3的‘这本书的问题：")
-        start = time.time()
-        print("#######################")
-        print("问题：",input_)
-        response = get_response(index,pre_prompt+input_)
-        print("#######################")
-        print("生成时间：",time.time()-start)
-        print(response)
